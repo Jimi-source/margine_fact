@@ -8,7 +8,20 @@
   </head>
   <body>
     <main class="container">
-      <header class="page-header">
+      <section id="authGate" class="auth-gate">
+        <div class="auth-card">
+          <h1>Фактическая маржа</h1>
+          <p class="muted">
+            Войдите через Google, чтобы открыть инструмент расчёта.
+          </p>
+          <button type="button" id="signInButton" class="primary-button">
+            Войти через Google
+          </button>
+        </div>
+      </section>
+
+      <div id="appContent" class="hidden">
+        <header class="page-header">
         <div class="header-row">
           <div>
             <h1>Фактическая маржа за период</h1>
@@ -19,9 +32,6 @@
           </div>
           <div class="auth-box">
             <div id="authState" class="muted">Гость</div>
-            <button type="button" id="signInButton" class="ghost-button">
-              Войти через Google
-            </button>
             <button type="button" id="signOutButton" class="ghost-button" disabled>
               Выйти
             </button>
@@ -135,6 +145,7 @@
         </div>
         <div id="sebesStatus" class="status"></div>
       </section>
+      </div>
     </main>
 
     <script src="node_modules/xlsx/dist/xlsx.full.min.js"></script>

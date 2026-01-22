@@ -150,6 +150,8 @@ const elements = {
   uploadStatus: document.getElementById("uploadStatus"),
   resultSummary: document.getElementById("resultSummary"),
   resultBody: document.getElementById("resultBody"),
+  appContent: document.getElementById("appContent"),
+  authGate: document.getElementById("authGate"),
   authState: document.getElementById("authState"),
   signInButton: document.getElementById("signInButton"),
   signOutButton: document.getElementById("signOutButton"),
@@ -631,6 +633,8 @@ function validateElements() {
   if (!elements.stencilsFile) missing.push("stencilsFile");
   if (!elements.calcButton) missing.push("calcButton");
   if (!elements.uploadStatus) missing.push("uploadStatus");
+  if (!elements.appContent) missing.push("appContent");
+  if (!elements.authGate) missing.push("authGate");
   if (!elements.authState) missing.push("authState");
   if (!elements.signInButton) missing.push("signInButton");
   if (!elements.signOutButton) missing.push("signOutButton");
@@ -1046,6 +1050,12 @@ function onCalculateClick() {
 }
 
 function updateAuthUI(user) {
+  if (elements.appContent) {
+    elements.appContent.classList.toggle("hidden", !user);
+  }
+  if (elements.authGate) {
+    elements.authGate.classList.toggle("hidden", Boolean(user));
+  }
   if (elements.authState) {
     elements.authState.textContent = user ? user.email || "Вход выполнен" : "Гость";
   }
