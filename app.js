@@ -118,6 +118,7 @@ const elements = {
   uploadStatus: document.getElementById("uploadStatus"),
   resultSummary: document.getElementById("resultSummary"),
   resultBody: document.getElementById("resultBody"),
+  missingCostBlock: document.getElementById("missingCostBlock"),
   appContent: document.getElementById("appContent"),
   authGate: document.getElementById("authGate"),
   authState: document.getElementById("authState"),
@@ -174,6 +175,18 @@ function setAuthStatus(message, isError = false) {
   if (!elements.authStatus) return;
   elements.authStatus.textContent = message;
   elements.authStatus.classList.toggle("error", isError);
+}
+
+function setMissingCostBlock(articles) {
+  if (!elements.missingCostBlock) return;
+  if (!articles || articles.length === 0) {
+    elements.missingCostBlock.classList.add("hidden");
+    elements.missingCostBlock.textContent = "";
+    return;
+  }
+  elements.missingCostBlock.classList.remove("hidden");
+  elements.missingCostBlock.textContent =
+    `Не хватает себестоимости для: ${articles.join(", ")}.`;
 }
 
 function mapAuthError(error) {
@@ -631,6 +644,7 @@ function validateElements() {
   if (!elements.stencilsFile) missing.push("stencilsFile");
   if (!elements.calcButton) missing.push("calcButton");
   if (!elements.uploadStatus) missing.push("uploadStatus");
+  if (!elements.missingCostBlock) missing.push("missingCostBlock");
   if (!elements.appContent) missing.push("appContent");
   if (!elements.authGate) missing.push("authGate");
   if (!elements.authState) missing.push("authState");
@@ -947,11 +961,10 @@ function calculate() {
 
   renderTable(rows);
   if (missingCosts.size > 0) {
-    setStatus(
-      `Расчет выполнен. Нет себестоимости для: ${Array.from(missingCosts).join(", ")}.`,
-      true
-    );
+    setMissingCostBlock(Array.from(missingCosts));
+    setStatus("Расчет выполнен с предупреждениями.");
   } else {
+    setMissingCostBlock([]);
     setStatus("Расчет выполнен.");
   }
 }
@@ -1260,18 +1273,7 @@ async function init() {
     elements.signInButton.addEventListener("click", async () => {
       const provider = new GoogleAuthProvider();
       try {
-        setAuthStatus("Открываю окно входа…");
-        await signInWithPopup(auth, provider);
-        return;
-      } catch (error) {
-        const code = error && error.code ? String(error.code) : "";
-        if (code !== "auth/popup-blocked" && code !== "auth/popup-closed-by-user") {
-          setAuthStatus(mapAuthError(error), true);
-          return;
-        }
-      }
-      try {
-        setAuthStatus("Попап заблокирован, перенаправляю на вход…");
+        setAuthStatus("Перенаправляю на вход…");
         sessionStorage.setItem("authRedirect", "1");
         await signInWithRedirect(auth, provider);
       } catch (error) {

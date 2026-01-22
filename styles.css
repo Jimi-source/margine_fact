@@ -239,6 +239,16 @@ tbody tr:hover {
   background: #f9fafb;
 }
 
+.missing-cost {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-weight: 600;
+}
+
 .sebes-table input {
   width: 100%;
   padding: 6px 8px;
