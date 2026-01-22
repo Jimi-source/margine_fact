@@ -223,7 +223,7 @@ function mapAuthError(error) {
   if (code === "auth/invalid-credential") {
     return "Некорректные данные входа. Попробуйте ещё раз.";
   }
-  return "Не удалось выполнить вход. Проверьте настройки Firebase.";
+  return `Не удалось выполнить вход. (${code || "unknown-error"})`;
 }
 
 function setActiveTab(tabName) {
@@ -1270,9 +1270,20 @@ async function init() {
 
   if (elements.signInButton) {
     elements.signInButton.addEventListener("click", async () => {
+      const provider = new GoogleAuthProvider();
       try {
-        setAuthStatus("Перенаправляю на вход…");
-        const provider = new GoogleAuthProvider();
+        setAuthStatus("Открываю окно входа…");
+        await signInWithPopup(auth, provider);
+        return;
+      } catch (error) {
+        const code = error && error.code ? String(error.code) : "";
+        if (code !== "auth/popup-blocked" && code !== "auth/popup-closed-by-user") {
+          setAuthStatus(mapAuthError(error), true);
+          return;
+        }
+      }
+      try {
+        setAuthStatus("Попап заблокирован, перенаправляю на вход…");
         sessionStorage.setItem("authRedirect", "1");
         await signInWithRedirect(auth, provider);
       } catch (error) {
@@ -1308,7 +1319,7 @@ async function init() {
       sessionStorage.removeItem("authRedirect");
     } else if (hadRedirect && !redirectError) {
       setAuthStatus(
-        "Вход не завершился. Проверьте Authorized domains и включение Google в Firebase Auth.",
+        `Вход не завершился. Проверьте Authorized domains. Origin: ${window.location.origin}`,
         true
       );
       sessionStorage.removeItem("authRedirect");
