@@ -32,43 +32,7 @@ const db = getFirestore(firebaseApp);
 
 const XLSXLib = window.XLSX;
 
-const SEBES = [
-  { article: "Б-турмалин", cost: 112.08 },
-  { article: "Б-гранат", cost: 99.92 },
-  { article: "Ч_Турмалин", cost: 203.16 },
-  { article: "Ч_гранат", cost: 174.78 },
-  { article: "Ч-шпинель", cost: 89.65 },
-  { article: "Б-шпинель-черный", cost: 63.43 },
-  { article: "Б-шпинель-красный", cost: 63.43 },
-  { article: "Б-шпинель-фиолетовый", cost: 63.43 },
-  { article: "Б-шпинель-белый", cost: 63.43 },
-  { article: "Б-шпинель-розовый", cost: 63.43 },
-  { article: "Б-шпинель-синий", cost: 63.43 },
-  { article: "Ч-хризопраз", cost: 89.65 },
-  { article: "Б-хризопраз", cost: 63.43 },
-  { article: "Ч-стекло-розовый", cost: 96.21 },
-  { article: "Б-стекло-розовый", cost: 66.27 },
-  { article: "Ч-стекло-шампань", cost: 96.21 },
-  { article: "Б-стекло-шампань", cost: 66.27 },
-  { article: "Ч-стекло-голубой", cost: 96.21 },
-  { article: "Ч-стекло-серый", cost: 96.21 },
-  { article: "Ч-стекло-фиолетовый", cost: 96.21 },
-  { article: "Ч-стекло-зеленый", cost: 96.21 },
-  { article: "Ч-лазурит", cost: 184.24 },
-  { article: "Б-лазурит", cost: 103.97 },
-  { article: "Ч-кварц", cost: 184.24 },
-  { article: "Б-кварц", cost: 103.97 },
-  { article: "Ч-циркон-зеленый", cost: 184.24 },
-  { article: "Б-циркон-зеленый", cost: 103.97 },
-  { article: "Ч-циркон-розовый", cost: 184.24 },
-  { article: "Б-циркон-розовый", cost: 103.97 },
-  { article: "Ч-циркон-белый", cost: 184.24 },
-  { article: "Б-циркон-белый", cost: 103.97 },
-  { article: "Ч-циркон-мультиколор", cost: 184.24 },
-  { article: "Б-циркон-мультиколор", cost: 103.97 },
-  { article: "Ч-циркон-черный", cost: 184.24 },
-  { article: "Б-циркон-черный", cost: 103.97 }
-];
+const SEBES = [];
 
 const REALIZ_TYPES = [
   "Баллы за скидки",
@@ -413,6 +377,15 @@ function parseNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function parseOptionalNumber(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  if (text === "") return null;
+  const cleaned = text.replace(/\s/g, "").replace(",", ".");
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function parseDateValue(value) {
   if (!value) return null;
   if (value instanceof Date && !Number.isNaN(value.valueOf())) {
@@ -721,7 +694,7 @@ function getSebesFromUI() {
       const articleInput = row.querySelector('input[data-field="article"]');
       const costInput = row.querySelector('input[data-field="cost"]');
       const article = articleInput ? articleInput.value.trim() : "";
-      const cost = costInput ? parseNumber(costInput.value) : 0;
+      const cost = costInput ? parseOptionalNumber(costInput.value) : null;
       return { article, cost };
     })
     .filter((item) => item.article !== "");
@@ -758,6 +731,7 @@ function calculate() {
 
   const sebesMap = new Map(state.sebes.map((item) => [item.article, item.cost]));
   const articles = state.sebes.map((item) => item.article);
+  const missingCosts = new Set();
   const articleCount = articles.length || 1;
 
   const accrualsByArticle = new Map();
@@ -913,7 +887,11 @@ function calculate() {
   const otherPerArticle = otherServicesTotal / articleCount;
 
   const rows = articles.map((article) => {
-    const cost = sebesMap.get(article) || 0;
+    const hasCost = sebesMap.has(article) && Number.isFinite(sebesMap.get(article));
+    const cost = hasCost ? sebesMap.get(article) : 0;
+    if (!hasCost) {
+      missingCosts.add(article);
+    }
     const qty = ordersByArticle.get(article) || 0;
     const costSum = cost * qty;
     const accrual = accrualsByArticle.get(article) || 0;
@@ -968,7 +946,14 @@ function calculate() {
   });
 
   renderTable(rows);
-  setStatus("Расчет выполнен.");
+  if (missingCosts.size > 0) {
+    setStatus(
+      `Расчет выполнен. Нет себестоимости для: ${Array.from(missingCosts).join(", ")}.`,
+      true
+    );
+  } else {
+    setStatus("Расчет выполнен.");
+  }
 }
 
 function renderSummary(values) {
@@ -1084,6 +1069,9 @@ function updateAuthUI(user) {
   if (elements.authGate) {
     elements.authGate.classList.toggle("hidden", Boolean(user));
   }
+  if (user) {
+    window.focus();
+  }
   if (elements.authState) {
     elements.authState.textContent = user ? user.email || "Вход выполнен" : "Гость";
   }
@@ -1098,7 +1086,7 @@ function updateAuthUI(user) {
 
 async function loadUserSebes(user) {
   if (!user) {
-    state.sebes = SEBES.slice();
+    state.sebes = [];
     state.sebesDirty = false;
     renderSebesTable(state.sebes);
     updateSebesActions();
@@ -1108,11 +1096,11 @@ async function loadUserSebes(user) {
   const ref = doc(db, "users", user.uid, "settings", "sebes");
   const snapshot = await getDoc(ref);
   const items = snapshot.exists() ? snapshot.data().items || [] : [];
-  state.sebes = items.length > 0 ? items : SEBES.slice();
+  state.sebes = items.length > 0 ? items : [];
   state.sebesDirty = false;
   renderSebesTable(state.sebes);
   updateSebesActions();
-  setSebesStatus(items.length > 0 ? "Данные загружены." : "Загружены значения по умолчанию.");
+  setSebesStatus(items.length > 0 ? "Данные загружены." : "Нет сохранённых данных.");
 }
 
 async function saveUserSebes() {
@@ -1139,7 +1127,7 @@ function addSebesRow() {
 }
 
 async function init() {
-  state.sebes = SEBES.slice();
+  state.sebes = [];
   if (!validateElements()) {
     return;
   }
