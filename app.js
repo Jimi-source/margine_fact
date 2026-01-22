@@ -2,8 +2,10 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/fireba
 import {
   getAuth,
   GoogleAuthProvider,
+  getRedirectResult,
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
   signOut
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import {
@@ -153,6 +155,7 @@ const elements = {
   appContent: document.getElementById("appContent"),
   authGate: document.getElementById("authGate"),
   authState: document.getElementById("authState"),
+  authStatus: document.getElementById("authStatus"),
   signInButton: document.getElementById("signInButton"),
   signOutButton: document.getElementById("signOutButton"),
   tabButtons: Array.from(document.querySelectorAll(".tab-button")),
@@ -199,6 +202,12 @@ function setSebesStatus(message, isError = false) {
   if (!elements.sebesStatus) return;
   elements.sebesStatus.textContent = message;
   elements.sebesStatus.classList.toggle("error", isError);
+}
+
+function setAuthStatus(message, isError = false) {
+  if (!elements.authStatus) return;
+  elements.authStatus.textContent = message;
+  elements.authStatus.classList.toggle("error", isError);
 }
 
 function setActiveTab(tabName) {
@@ -636,6 +645,7 @@ function validateElements() {
   if (!elements.appContent) missing.push("appContent");
   if (!elements.authGate) missing.push("authGate");
   if (!elements.authState) missing.push("authState");
+  if (!elements.authStatus) missing.push("authStatus");
   if (!elements.signInButton) missing.push("signInButton");
   if (!elements.signOutButton) missing.push("signOutButton");
   if (!elements.sebesBody) missing.push("sebesBody");
@@ -1243,10 +1253,18 @@ async function init() {
   if (elements.signInButton) {
     elements.signInButton.addEventListener("click", async () => {
       try {
+        setAuthStatus("Открываю окно входа…");
         const provider = new GoogleAuthProvider();
         await signInWithPopup(auth, provider);
       } catch (error) {
-        setSebesStatus("Ошибка входа. Попробуйте снова.", true);
+        const code = error && error.code ? String(error.code) : "";
+        if (code === "auth/popup-blocked" || code === "auth/popup-closed-by-user") {
+          setAuthStatus("Попап заблокирован, перенаправляю на вход…");
+          const provider = new GoogleAuthProvider();
+          await signInWithRedirect(auth, provider);
+          return;
+        }
+        setAuthStatus("Ошибка входа. Проверьте доступ к pop-up и попробуйте снова.", true);
       }
     });
   }
@@ -1263,10 +1281,17 @@ async function init() {
   onAuthStateChanged(auth, async (user) => {
     state.user = user || null;
     updateAuthUI(state.user);
+    setAuthStatus("");
     await loadUserSebes(state.user);
     renderSebesTable(state.sebes);
     updateSebesActions();
   });
+
+  try {
+    await getRedirectResult(auth);
+  } catch (error) {
+    setAuthStatus("Не удалось завершить вход через редирект.", true);
+  }
 
 }
 
