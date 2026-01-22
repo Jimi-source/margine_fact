@@ -15,6 +15,8 @@ import {
   setDoc
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
+window.__APP_READY = false;
+
 const firebaseConfig = {
   apiKey: "AIzaSyCAlv2Wqzyy89Hp5sOYUBpuTNieqMIjF74",
   authDomain: "marginefact.firebaseapp.com",
@@ -654,6 +656,7 @@ function validateElements() {
   if (!elements.saveSebes) missing.push("saveSebes");
   if (missing.length > 0) {
     setStatus("Ошибка: не найдены элементы (" + missing.join(", ") + ").", true);
+    setAuthStatus("Ошибка интерфейса. Перезагрузите страницу.", true);
     return false;
   }
   return true;
@@ -1053,6 +1056,7 @@ function onCalculateClick() {
   }
   if (!XLSXLib) {
     setStatus("Ошибка: библиотека XLSX не загрузилась.", true);
+    setAuthStatus("Ошибка: библиотека XLSX не загрузилась.", true);
     return;
   }
   setStatus("Запускаю расчет…");
@@ -1253,17 +1257,10 @@ async function init() {
   if (elements.signInButton) {
     elements.signInButton.addEventListener("click", async () => {
       try {
-        setAuthStatus("Открываю окно входа…");
+        setAuthStatus("Перенаправляю на вход…");
         const provider = new GoogleAuthProvider();
-        await signInWithPopup(auth, provider);
+        await signInWithRedirect(auth, provider);
       } catch (error) {
-        const code = error && error.code ? String(error.code) : "";
-        if (code === "auth/popup-blocked" || code === "auth/popup-closed-by-user") {
-          setAuthStatus("Попап заблокирован, перенаправляю на вход…");
-          const provider = new GoogleAuthProvider();
-          await signInWithRedirect(auth, provider);
-          return;
-        }
         setAuthStatus("Ошибка входа. Проверьте доступ к pop-up и попробуйте снова.", true);
       }
     });
@@ -1293,6 +1290,13 @@ async function init() {
     setAuthStatus("Не удалось завершить вход через редирект.", true);
   }
 
+  setAuthStatus("Готово к входу.");
+  window.__APP_READY = true;
+
 }
 
-init();
+try {
+  init();
+} catch (error) {
+  setAuthStatus("Ошибка инициализации приложения.", true);
+}

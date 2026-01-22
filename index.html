@@ -151,5 +151,16 @@
 
     <script src="node_modules/xlsx/dist/xlsx.full.min.js"></script>
     <script type="module" src="app.js"></script>
+    <script>
+      setTimeout(() => {
+        if (!window.__APP_READY) {
+          const el = document.getElementById("authStatus");
+          if (el && !el.textContent) {
+            el.textContent =
+              "Приложение не загрузилось. Откройте через http://127.0.0.1 и проверьте доступ к интернету.";
+          }
+        }
+      }, 1500);
+    </script>
   </body>
 </html>
