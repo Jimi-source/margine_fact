@@ -742,7 +742,7 @@ function calculate() {
   }
 
   const sebesMap = new Map(state.sebes.map((item) => [item.article, item.cost]));
-  const articles = state.sebes.map((item) => item.article);
+  const articles = Array.from(ordersByArticle.keys()).sort();
   const missingCosts = new Set();
   const articleCount = articles.length || 1;
 
@@ -1272,7 +1272,12 @@ async function init() {
       const provider = new GoogleAuthProvider();
       try {
         setAuthStatus("Открываю окно входа…");
-        await signInWithPopup(auth, provider);
+        const result = await signInWithPopup(auth, provider);
+        state.user = result.user || null;
+        updateAuthUI(state.user);
+        await loadUserSebes(state.user);
+        renderSebesTable(state.sebes);
+        updateSebesActions();
         setAuthStatus("");
       } catch (error) {
         const code = error && error.code ? String(error.code) : "";
