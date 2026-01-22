@@ -742,9 +742,7 @@ function calculate() {
   }
 
   const sebesMap = new Map(state.sebes.map((item) => [item.article, item.cost]));
-  const articles = Array.from(ordersByArticle.keys()).sort();
   const missingCosts = new Set();
-  const articleCount = articles.length || 1;
 
   const accrualsByArticle = new Map();
   const adsByArticle = new Map();
@@ -896,6 +894,8 @@ function calculate() {
     }
   }
 
+  const articles = Array.from(ordersByArticle.keys()).sort();
+  const articleCount = articles.length || 1;
   const otherPerArticle = otherServicesTotal / articleCount;
 
   const rows = articles.map((article) => {
