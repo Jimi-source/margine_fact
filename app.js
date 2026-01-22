@@ -212,6 +212,20 @@ function setAuthStatus(message, isError = false) {
   elements.authStatus.classList.toggle("error", isError);
 }
 
+function mapAuthError(error) {
+  const code = error && error.code ? String(error.code) : "";
+  if (code === "auth/unauthorized-domain") {
+    return "Домен не разрешён в Firebase Auth (Authorized domains).";
+  }
+  if (code === "auth/operation-not-allowed") {
+    return "В Firebase Auth не включён провайдер Google.";
+  }
+  if (code === "auth/invalid-credential") {
+    return "Некорректные данные входа. Попробуйте ещё раз.";
+  }
+  return "Не удалось выполнить вход. Проверьте настройки Firebase.";
+}
+
 function setActiveTab(tabName) {
   elements.tabButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.tab === tabName);
@@ -1259,9 +1273,10 @@ async function init() {
       try {
         setAuthStatus("Перенаправляю на вход…");
         const provider = new GoogleAuthProvider();
+        sessionStorage.setItem("authRedirect", "1");
         await signInWithRedirect(auth, provider);
       } catch (error) {
-        setAuthStatus("Ошибка входа. Проверьте доступ к pop-up и попробуйте снова.", true);
+        setAuthStatus(mapAuthError(error), true);
       }
     });
   }
@@ -1275,20 +1290,33 @@ async function init() {
     });
   }
 
+  const hadRedirect = sessionStorage.getItem("authRedirect") === "1";
+  let redirectError = null;
+  try {
+    await getRedirectResult(auth);
+  } catch (error) {
+    redirectError = error;
+    setAuthStatus(mapAuthError(error), true);
+    sessionStorage.removeItem("authRedirect");
+  }
+
   onAuthStateChanged(auth, async (user) => {
     state.user = user || null;
     updateAuthUI(state.user);
-    setAuthStatus("");
+    if (state.user) {
+      setAuthStatus("");
+      sessionStorage.removeItem("authRedirect");
+    } else if (hadRedirect && !redirectError) {
+      setAuthStatus(
+        "Вход не завершился. Проверьте Authorized domains и включение Google в Firebase Auth.",
+        true
+      );
+      sessionStorage.removeItem("authRedirect");
+    }
     await loadUserSebes(state.user);
     renderSebesTable(state.sebes);
     updateSebesActions();
   });
-
-  try {
-    await getRedirectResult(auth);
-  } catch (error) {
-    setAuthStatus("Не удалось завершить вход через редирект.", true);
-  }
 
   setAuthStatus("Готово к входу.");
   window.__APP_READY = true;
