@@ -2,10 +2,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/fireba
 import {
   getAuth,
   GoogleAuthProvider,
-  getRedirectResult,
   onAuthStateChanged,
   signInWithPopup,
-  signInWithRedirect,
   signOut
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import {
@@ -1273,10 +1271,19 @@ async function init() {
     elements.signInButton.addEventListener("click", async () => {
       const provider = new GoogleAuthProvider();
       try {
-        setAuthStatus("Перенаправляю на вход…");
-        sessionStorage.setItem("authRedirect", "1");
-        await signInWithRedirect(auth, provider);
+        setAuthStatus("Открываю окно входа…");
+        await signInWithPopup(auth, provider);
+        setAuthStatus("");
       } catch (error) {
+        const code = error && error.code ? String(error.code) : "";
+        if (code === "auth/popup-blocked") {
+          setAuthStatus("Разрешите всплывающие окна для входа.", true);
+          return;
+        }
+        if (code === "auth/popup-closed-by-user") {
+          setAuthStatus("Вход отменён пользователем.", true);
+          return;
+        }
         setAuthStatus(mapAuthError(error), true);
       }
     });
@@ -1291,28 +1298,11 @@ async function init() {
     });
   }
 
-  const hadRedirect = sessionStorage.getItem("authRedirect") === "1";
-  let redirectError = null;
-  try {
-    await getRedirectResult(auth);
-  } catch (error) {
-    redirectError = error;
-    setAuthStatus(mapAuthError(error), true);
-    sessionStorage.removeItem("authRedirect");
-  }
-
   onAuthStateChanged(auth, async (user) => {
     state.user = user || null;
     updateAuthUI(state.user);
     if (state.user) {
       setAuthStatus("");
-      sessionStorage.removeItem("authRedirect");
-    } else if (hadRedirect && !redirectError) {
-      setAuthStatus(
-        `Вход не завершился. Проверьте Authorized domains. Origin: ${window.location.origin}`,
-        true
-      );
-      sessionStorage.removeItem("authRedirect");
     }
     await loadUserSebes(state.user);
     renderSebesTable(state.sebes);
