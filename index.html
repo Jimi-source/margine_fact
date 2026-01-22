@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Фактическая маржа</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="page-header">
+        <h1>Фактическая маржа за период</h1>
+        <p class="muted">
+          Отчеты обрабатываются локально в браузере. Даты по заказам
+          фильтруются по полю <span class="mono">Delivery date</span>.
+        </p>
+      </header>
+
+      <section class="card">
+        <h2>1. Период отчета</h2>
+        <div class="grid">
+          <label>
+            Начало периода
+            <input type="date" id="startDate" />
+          </label>
+          <label>
+            Конец периода
+            <input type="date" id="endDate" />
+          </label>
+        </div>
+        <div id="dateHint" class="hint"></div>
+      </section>
+
+      <section class="card">
+        <h2>2. Загрузка отчетов</h2>
+        <div class="grid">
+          <label>
+            Начисления (обязательный)
+            <input type="file" id="accrualsFile" accept=".xlsx,.xls" />
+          </label>
+          <label>
+            Заказы (обязательный)
+            <input type="file" id="ordersFile" accept=".xlsx,.xls" />
+          </label>
+          <label>
+            ПВП (необязательный)
+            <input type="file" id="pvpFile" accept=".xlsx,.xls" />
+          </label>
+          <label>
+            Трафареты (необязательный)
+            <input type="file" id="stencilsFile" accept=".xlsx,.xls" />
+          </label>
+        </div>
+        <button type="button" id="calcButton" class="primary-button" disabled>
+          Рассчитать
+        </button>
+        <div id="uploadStatus" class="status"></div>
+      </section>
+
+      <section class="card">
+        <h2>3. Результат</h2>
+        <div id="resultSummary" class="summary"></div>
+        <div class="table-wrap">
+          <table id="resultTable">
+            <thead>
+              <tr>
+                <th>Артикул</th>
+                <th>Себес</th>
+                <th>Кол-во</th>
+                <th>Сумма себестоимости</th>
+                <th>Прочие услуги</th>
+                <th>Начисления</th>
+                <th>Реклама</th>
+                <th>Выручка</th>
+                <th>Маржа</th>
+              </tr>
+            </thead>
+            <tbody id="resultBody">
+              <tr>
+                <td colspan="9" class="muted">
+                  Загрузите отчеты и выберите период, чтобы увидеть расчет.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="node_modules/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
