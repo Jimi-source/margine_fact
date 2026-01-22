@@ -19,10 +19,66 @@ body {
   margin-bottom: 24px;
 }
 
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
 .page-header h1 {
   margin: 0 0 8px;
   font-size: 28px;
 }
+.auth-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 220px;
+}
+
+.ghost-button {
+  padding: 8px 12px;
+  border: 1px solid #cbd5f5;
+  border-radius: 10px;
+  background: #eef2ff;
+  color: #1d4ed8;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ghost-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tab-button {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid #d0d7de;
+  background: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab-button.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.tab-panel.hidden {
+  display: none;
+}
+
 
 .muted {
   color: #6b7280;
@@ -157,4 +213,19 @@ thead th {
 
 tbody tr:hover {
   background: #f9fafb;
+}
+
+.sebes-table input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.sebes-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
 }

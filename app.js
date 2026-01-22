@@ -1,3 +1,31 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import {
+  doc,
+  getDoc,
+  getFirestore,
+  setDoc
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCAlv2Wqzyy89Hp5sOYUBpuTNieqMIjF74",
+  authDomain: "marginefact.firebaseapp.com",
+  projectId: "marginefact",
+  storageBucket: "marginefact.firebasestorage.app",
+  messagingSenderId: "295108927428",
+  appId: "1:295108927428:web:1cc3b31ad0a58132d7ce91"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
+
 const XLSXLib = window.XLSX;
 
 const SEBES = [
@@ -105,7 +133,9 @@ const state = {
   pvp: null,
   stencils: null,
   sebes: [],
-  earliestAccrualDate: null
+  earliestAccrualDate: null,
+  user: null,
+  sebesDirty: false
 };
 
 const elements = {
@@ -119,7 +149,16 @@ const elements = {
   dateHint: document.getElementById("dateHint"),
   uploadStatus: document.getElementById("uploadStatus"),
   resultSummary: document.getElementById("resultSummary"),
-  resultBody: document.getElementById("resultBody")
+  resultBody: document.getElementById("resultBody"),
+  authState: document.getElementById("authState"),
+  signInButton: document.getElementById("signInButton"),
+  signOutButton: document.getElementById("signOutButton"),
+  tabButtons: Array.from(document.querySelectorAll(".tab-button")),
+  tabPanels: Array.from(document.querySelectorAll(".tab-panel")),
+  sebesBody: document.getElementById("sebesBody"),
+  sebesStatus: document.getElementById("sebesStatus"),
+  addSebesRow: document.getElementById("addSebesRow"),
+  saveSebes: document.getElementById("saveSebes")
 };
 
 const numberFormatter = new Intl.NumberFormat("ru-RU", {
@@ -152,6 +191,32 @@ function setStatus(message, isError = false) {
   if (!elements.uploadStatus) return;
   elements.uploadStatus.textContent = message;
   elements.uploadStatus.classList.toggle("error", isError);
+}
+
+function setSebesStatus(message, isError = false) {
+  if (!elements.sebesStatus) return;
+  elements.sebesStatus.textContent = message;
+  elements.sebesStatus.classList.toggle("error", isError);
+}
+
+function setActiveTab(tabName) {
+  elements.tabButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.tab === tabName);
+  });
+  elements.tabPanels.forEach((panel) => {
+    const isActive = panel.dataset.panel === tabName;
+    panel.classList.toggle("hidden", !isActive);
+  });
+}
+
+function updateSebesActions() {
+  const canEdit = Boolean(state.user);
+  if (elements.addSebesRow) {
+    elements.addSebesRow.disabled = !canEdit;
+  }
+  if (elements.saveSebes) {
+    elements.saveSebes.disabled = !canEdit || !state.sebesDirty;
+  }
 }
 
 function findHeaderRow(rows, requiredHeaders) {
@@ -566,6 +631,13 @@ function validateElements() {
   if (!elements.stencilsFile) missing.push("stencilsFile");
   if (!elements.calcButton) missing.push("calcButton");
   if (!elements.uploadStatus) missing.push("uploadStatus");
+  if (!elements.authState) missing.push("authState");
+  if (!elements.signInButton) missing.push("signInButton");
+  if (!elements.signOutButton) missing.push("signOutButton");
+  if (!elements.sebesBody) missing.push("sebesBody");
+  if (!elements.sebesStatus) missing.push("sebesStatus");
+  if (!elements.addSebesRow) missing.push("addSebesRow");
+  if (!elements.saveSebes) missing.push("saveSebes");
   if (missing.length > 0) {
     setStatus("Ошибка: не найдены элементы (" + missing.join(", ") + ").", true);
     return false;
@@ -583,6 +655,65 @@ function formatInteger(value) {
 
 function formatPercent(value) {
   return percentFormatter.format(value);
+}
+
+function createSebesRow(item, index) {
+  const row = document.createElement("tr");
+  const disabled = state.user ? "" : "disabled";
+  row.innerHTML = `
+    <td><input type="text" data-field="article" data-index="${index}" value="${item.article || ""}" ${disabled}></td>
+    <td><input type="text" data-field="cost" data-index="${index}" value="${item.cost ?? ""}" ${disabled}></td>
+    <td><button type="button" class="ghost-button" data-remove="${index}" ${disabled}>Удалить</button></td>
+  `;
+  return row;
+}
+
+function renderSebesTable(items) {
+  if (!elements.sebesBody) return;
+  elements.sebesBody.innerHTML = "";
+  items.forEach((item, index) => {
+    elements.sebesBody.appendChild(createSebesRow(item, index));
+  });
+  elements.sebesBody.querySelectorAll("input").forEach((input) => {
+    input.addEventListener("input", onSebesInputChange);
+  });
+  elements.sebesBody.querySelectorAll("[data-remove]").forEach((button) => {
+    button.addEventListener("click", onSebesRemoveRow);
+  });
+}
+
+function getSebesFromUI() {
+  if (!elements.sebesBody) return [];
+  const rows = Array.from(elements.sebesBody.querySelectorAll("tr"));
+  return rows
+    .map((row) => {
+      const articleInput = row.querySelector('input[data-field="article"]');
+      const costInput = row.querySelector('input[data-field="cost"]');
+      const article = articleInput ? articleInput.value.trim() : "";
+      const cost = costInput ? parseNumber(costInput.value) : 0;
+      return { article, cost };
+    })
+    .filter((item) => item.article !== "");
+}
+
+function markSebesDirty() {
+  state.sebesDirty = true;
+  updateSebesActions();
+}
+
+function onSebesInputChange() {
+  state.sebes = getSebesFromUI();
+  markSebesDirty();
+}
+
+function onSebesRemoveRow(event) {
+  const index = Number(event.currentTarget.dataset.remove || -1);
+  if (Number.isNaN(index) || index < 0) return;
+  const items = getSebesFromUI();
+  items.splice(index, 1);
+  state.sebes = items;
+  renderSebesTable(items);
+  markSebesDirty();
 }
 
 function calculate() {
@@ -914,8 +1045,63 @@ function onCalculateClick() {
   calculate();
 }
 
+function updateAuthUI(user) {
+  if (elements.authState) {
+    elements.authState.textContent = user ? user.email || "Вход выполнен" : "Гость";
+  }
+  if (elements.signInButton) {
+    elements.signInButton.disabled = Boolean(user);
+  }
+  if (elements.signOutButton) {
+    elements.signOutButton.disabled = !user;
+  }
+  updateSebesActions();
+}
+
+async function loadUserSebes(user) {
+  if (!user) {
+    state.sebes = SEBES.slice();
+    state.sebesDirty = false;
+    renderSebesTable(state.sebes);
+    updateSebesActions();
+    setSebesStatus("Войдите, чтобы редактировать себестоимость.");
+    return;
+  }
+  const ref = doc(db, "users", user.uid, "settings", "sebes");
+  const snapshot = await getDoc(ref);
+  const items = snapshot.exists() ? snapshot.data().items || [] : [];
+  state.sebes = items.length > 0 ? items : SEBES.slice();
+  state.sebesDirty = false;
+  renderSebesTable(state.sebes);
+  updateSebesActions();
+  setSebesStatus(items.length > 0 ? "Данные загружены." : "Загружены значения по умолчанию.");
+}
+
+async function saveUserSebes() {
+  if (!state.user) {
+    setSebesStatus("Нужно войти в аккаунт.", true);
+    return;
+  }
+  const items = getSebesFromUI();
+  const ref = doc(db, "users", state.user.uid, "settings", "sebes");
+  await setDoc(ref, { items, updatedAt: new Date().toISOString() });
+  state.sebes = items;
+  state.sebesDirty = false;
+  updateSebesActions();
+  setSebesStatus("Сохранено.");
+}
+
+function addSebesRow() {
+  if (!state.user) return;
+  const items = getSebesFromUI();
+  items.push({ article: "", cost: "" });
+  state.sebes = items;
+  renderSebesTable(items);
+  markSebesDirty();
+}
+
 async function init() {
-  state.sebes = SEBES;
+  state.sebes = SEBES.slice();
   if (!validateElements()) {
     return;
   }
@@ -929,6 +1115,21 @@ async function init() {
   elements.startDate.addEventListener("change", onDateChange);
   elements.endDate.addEventListener("change", onDateChange);
   elements.calcButton.addEventListener("click", onCalculateClick);
+  if (elements.addSebesRow) {
+    elements.addSebesRow.addEventListener("click", addSebesRow);
+  }
+  if (elements.saveSebes) {
+    elements.saveSebes.addEventListener("click", saveUserSebes);
+  }
+  if (elements.tabButtons.length > 0) {
+    elements.tabButtons.forEach((button) => {
+      button.addEventListener("click", () => setActiveTab(button.dataset.tab));
+    });
+    setActiveTab("calc");
+  }
+
+  renderSebesTable(state.sebes);
+  updateSebesActions();
 
   const accrualsFallback = {
     startRow: 1,
@@ -1028,6 +1229,34 @@ async function init() {
       { name: "Расход", keys: ["расход", "стоимость", "сумма"], required: true }
     ], stencilsFallback)
   );
+
+  if (elements.signInButton) {
+    elements.signInButton.addEventListener("click", async () => {
+      try {
+        const provider = new GoogleAuthProvider();
+        await signInWithPopup(auth, provider);
+      } catch (error) {
+        setSebesStatus("Ошибка входа. Попробуйте снова.", true);
+      }
+    });
+  }
+  if (elements.signOutButton) {
+    elements.signOutButton.addEventListener("click", async () => {
+      try {
+        await signOut(auth);
+      } catch (error) {
+        setSebesStatus("Ошибка выхода. Попробуйте снова.", true);
+      }
+    });
+  }
+
+  onAuthStateChanged(auth, async (user) => {
+    state.user = user || null;
+    updateAuthUI(state.user);
+    await loadUserSebes(state.user);
+    renderSebesTable(state.sebes);
+    updateSebesActions();
+  });
 
 }
 

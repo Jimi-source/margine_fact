@@ -9,14 +9,36 @@
   <body>
     <main class="container">
       <header class="page-header">
-        <h1>Фактическая маржа за период</h1>
-        <p class="muted">
-          Отчеты обрабатываются локально в браузере. Даты по заказам
-          фильтруются по полю <span class="mono">Delivery date</span>.
-        </p>
+        <div class="header-row">
+          <div>
+            <h1>Фактическая маржа за период</h1>
+            <p class="muted">
+              Отчеты обрабатываются локально в браузере. Даты по заказам
+              фильтруются по полю <span class="mono">Delivery date</span>.
+            </p>
+          </div>
+          <div class="auth-box">
+            <div id="authState" class="muted">Гость</div>
+            <button type="button" id="signInButton" class="ghost-button">
+              Войти через Google
+            </button>
+            <button type="button" id="signOutButton" class="ghost-button" disabled>
+              Выйти
+            </button>
+          </div>
+        </div>
       </header>
 
-      <section class="card">
+      <div class="tabs">
+        <button type="button" class="tab-button active" data-tab="calc">
+          Расчёт
+        </button>
+        <button type="button" class="tab-button" data-tab="sebes">
+          Себестоимость
+        </button>
+      </div>
+
+      <section class="card tab-panel" data-panel="calc">
         <h2>1. Период отчета</h2>
         <div class="grid">
           <label>
@@ -57,7 +79,7 @@
         <div id="uploadStatus" class="status"></div>
       </section>
 
-      <section class="card">
+      <section class="card tab-panel" data-panel="calc">
         <h2>3. Результат</h2>
         <div id="resultSummary" class="summary"></div>
         <div class="table-wrap">
@@ -85,9 +107,37 @@
           </table>
         </div>
       </section>
+
+      <section class="card tab-panel hidden" data-panel="sebes">
+        <h2>Себестоимость по артикулам</h2>
+        <p class="muted">
+          Настройки сохраняются для вашего аккаунта Google.
+        </p>
+        <div class="table-wrap">
+          <table class="sebes-table">
+            <thead>
+              <tr>
+                <th>Артикул</th>
+                <th>Себестоимость</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="sebesBody"></tbody>
+          </table>
+        </div>
+        <div class="sebes-actions">
+          <button type="button" id="addSebesRow" class="ghost-button">
+            Добавить строку
+          </button>
+          <button type="button" id="saveSebes" class="primary-button" disabled>
+            Сохранить
+          </button>
+        </div>
+        <div id="sebesStatus" class="status"></div>
+      </section>
     </main>
 
     <script src="node_modules/xlsx/dist/xlsx.full.min.js"></script>
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>
