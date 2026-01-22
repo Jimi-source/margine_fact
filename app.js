@@ -1070,15 +1070,22 @@ function onCalculateClick() {
     return;
   }
   setStatus("Запускаю расчет…");
-  calculate();
+  try {
+    calculate();
+  } catch (error) {
+    const message = error && error.message ? error.message : "Неизвестная ошибка";
+    setStatus(`Ошибка расчета: ${message}`, true);
+  }
 }
 
 function updateAuthUI(user) {
   if (elements.appContent) {
     elements.appContent.classList.toggle("hidden", !user);
+    elements.appContent.style.display = user ? "block" : "none";
   }
   if (elements.authGate) {
     elements.authGate.classList.toggle("hidden", Boolean(user));
+    elements.authGate.style.display = user ? "none" : "flex";
   }
   if (user) {
     window.focus();
