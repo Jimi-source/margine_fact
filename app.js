@@ -60,7 +60,16 @@ const state = {
   user: null,
   sebesDirty: false,
   otherServicesTypes: [],
-  otherServicesTypesSelected: new Set()
+  otherServicesTypesSelected: new Set(),
+  lastSummary: null,
+  lastCalcRange: null,
+  cashflow: {
+    year: new Date().getFullYear(),
+    granularity: "week",
+    periods: [],
+    selectedKey: "",
+    entries: {}
+  }
 };
 
 const elements = {
@@ -90,7 +99,14 @@ const elements = {
   saveSebes: document.getElementById("saveSebes"),
   sebesFile: document.getElementById("sebesFile"),
   downloadSebesTemplate: document.getElementById("downloadSebesTemplate"),
-  otherServicesFilter: document.getElementById("otherServicesFilter")
+  otherServicesFilter: document.getElementById("otherServicesFilter"),
+  cashflowYear: document.getElementById("cashflowYear"),
+  cashflowGranularity: document.getElementById("cashflowGranularity"),
+  cashflowPeriod: document.getElementById("cashflowPeriod"),
+  cashflowOpenPeriod: document.getElementById("cashflowOpenPeriod"),
+  cashflowSavePeriod: document.getElementById("cashflowSavePeriod"),
+  cashflowStatus: document.getElementById("cashflowStatus"),
+  cashflowBody: document.getElementById("cashflowBody")
 };
 
 const numberFormatter = new Intl.NumberFormat("ru-RU", {
@@ -129,6 +145,12 @@ function setSebesStatus(message, isError = false) {
   if (!elements.sebesStatus) return;
   elements.sebesStatus.textContent = message;
   elements.sebesStatus.classList.toggle("error", isError);
+}
+
+function setCashflowStatus(message, isError = false) {
+  if (!elements.cashflowStatus) return;
+  elements.cashflowStatus.textContent = message;
+  elements.cashflowStatus.classList.toggle("error", isError);
 }
 
 function setAuthStatus(message, isError = false) {
@@ -187,6 +209,19 @@ function updateSebesActions() {
   if (elements.downloadSebesTemplate) {
     elements.downloadSebesTemplate.disabled = !canEdit;
   }
+}
+
+function updateCashflowActions() {
+  if (!elements.cashflowSavePeriod) return;
+  const hasSelection = Boolean(state.cashflow.selectedKey);
+  const hasSummary = Boolean(state.lastSummary && state.lastCalcRange);
+  const sameRange =
+    hasSummary &&
+    state.cashflow.selectedKey.includes(
+      `${toISODate(state.lastCalcRange.start)}|${toISODate(state.lastCalcRange.end)}`
+    );
+  elements.cashflowSavePeriod.disabled =
+    !state.user || !hasSelection || !hasSummary || !sameRange;
 }
 
 function findHeaderRow(rows, requiredHeaders) {
@@ -457,6 +492,48 @@ function dateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
+function toISODate(date) {
+  if (!date) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(date, days) {
+  const next = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function startOfMonth(year, monthIndex) {
+  return new Date(year, monthIndex, 1);
+}
+
+function endOfMonth(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0);
+}
+
+function startOfQuarter(year, quarterIndex) {
+  return new Date(year, quarterIndex * 3, 1);
+}
+
+function endOfQuarter(year, quarterIndex) {
+  return new Date(year, quarterIndex * 3 + 3, 0);
+}
+
+function isoWeekYear(date) {
+  const day = date.getDay() === 0 ? 7 : date.getDay();
+  const thursday = addDays(date, 4 - day);
+  return thursday.getFullYear();
+}
+
+function startOfIsoWeekYear(year) {
+  const jan4 = new Date(year, 0, 4);
+  const day = jan4.getDay() === 0 ? 7 : jan4.getDay();
+  return addDays(jan4, 1 - day);
+}
+
 function getRowValue(row, headerOptions) {
   for (const header of headerOptions) {
     if (row[header] !== undefined) return row[header];
@@ -624,6 +701,13 @@ function validateElements() {
   if (!elements.sebesFile) missing.push("sebesFile");
   if (!elements.downloadSebesTemplate) missing.push("downloadSebesTemplate");
   if (!elements.otherServicesFilter) missing.push("otherServicesFilter");
+  if (!elements.cashflowYear) missing.push("cashflowYear");
+  if (!elements.cashflowGranularity) missing.push("cashflowGranularity");
+  if (!elements.cashflowPeriod) missing.push("cashflowPeriod");
+  if (!elements.cashflowOpenPeriod) missing.push("cashflowOpenPeriod");
+  if (!elements.cashflowSavePeriod) missing.push("cashflowSavePeriod");
+  if (!elements.cashflowStatus) missing.push("cashflowStatus");
+  if (!elements.cashflowBody) missing.push("cashflowBody");
   if (missing.length > 0) {
     setStatus("Ошибка: не найдены элементы (" + missing.join(", ") + ").", true);
     setAuthStatus("Ошибка интерфейса. Перезагрузите страницу.", true);
@@ -747,6 +831,214 @@ function updateOtherServicesTypes() {
   state.otherServicesTypes = availableTypes;
   state.otherServicesTypesSelected = nextSelected;
   renderOtherServicesFilter();
+}
+
+function buildCashflowPeriods(year, granularity) {
+  const periods = [];
+  if (granularity === "day") {
+    let current = new Date(year, 0, 1);
+    const end = new Date(year, 11, 31);
+    while (current <= end) {
+      const start = current;
+      const finish = current;
+      const key = `${granularity}|${toISODate(start)}|${toISODate(finish)}`;
+      periods.push({
+        key,
+        label: formatDate(start),
+        start,
+        end: finish
+      });
+      current = addDays(current, 1);
+    }
+    return periods;
+  }
+  if (granularity === "week") {
+    let current = startOfIsoWeekYear(year);
+    let weekIndex = 1;
+    while (isoWeekYear(current) === year) {
+      const start = current;
+      const finish = addDays(start, 6);
+      const key = `${granularity}|${toISODate(start)}|${toISODate(finish)}`;
+      periods.push({
+        key,
+        label: `Неделя ${weekIndex} (${formatDate(start)} – ${formatDate(finish)})`,
+        start,
+        end: finish
+      });
+      current = addDays(current, 7);
+      weekIndex += 1;
+    }
+    return periods;
+  }
+  if (granularity === "month") {
+    for (let i = 0; i < 12; i += 1) {
+      const start = startOfMonth(year, i);
+      const finish = endOfMonth(year, i);
+      const key = `${granularity}|${toISODate(start)}|${toISODate(finish)}`;
+      periods.push({
+        key,
+        label: `${start.toLocaleDateString("ru-RU", {
+          month: "long",
+          year: "numeric"
+        })}`,
+        start,
+        end: finish
+      });
+    }
+    return periods;
+  }
+  if (granularity === "quarter") {
+    for (let q = 0; q < 4; q += 1) {
+      const start = startOfQuarter(year, q);
+      const finish = endOfQuarter(year, q);
+      const key = `${granularity}|${toISODate(start)}|${toISODate(finish)}`;
+      periods.push({
+        key,
+        label: `${q + 1} квартал (${formatDate(start)} – ${formatDate(finish)})`,
+        start,
+        end: finish
+      });
+    }
+    return periods;
+  }
+  const start = new Date(year, 0, 1);
+  const finish = new Date(year, 11, 31);
+  const key = `${granularity}|${toISODate(start)}|${toISODate(finish)}`;
+  periods.push({ key, label: `${year}`, start, end: finish });
+  return periods;
+}
+
+function renderCashflowPeriods() {
+  if (!elements.cashflowPeriod) return;
+  elements.cashflowPeriod.innerHTML = "";
+  state.cashflow.periods.forEach((period) => {
+    const option = document.createElement("option");
+    option.value = period.key;
+    option.textContent = period.label;
+    elements.cashflowPeriod.appendChild(option);
+  });
+  if (!state.cashflow.selectedKey && state.cashflow.periods.length > 0) {
+    state.cashflow.selectedKey = state.cashflow.periods[0].key;
+  }
+  elements.cashflowPeriod.value = state.cashflow.selectedKey;
+  updateCashflowActions();
+}
+
+function renderCashflowTable() {
+  if (!elements.cashflowBody) return;
+  if (state.cashflow.periods.length === 0) {
+    elements.cashflowBody.innerHTML = `
+      <tr>
+        <td colspan="2" class="muted">Нет данных для отображения.</td>
+      </tr>
+    `;
+    return;
+  }
+  elements.cashflowBody.innerHTML = state.cashflow.periods
+    .map((period) => {
+      const entry = state.cashflow.entries[period.key];
+      const margin = entry ? formatPercent(entry.marginBeforeTax) : "—";
+      return `
+        <tr>
+          <td>${period.label}</td>
+          <td>${margin}</td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+function refreshCashflowView() {
+  state.cashflow.periods = buildCashflowPeriods(
+    state.cashflow.year,
+    state.cashflow.granularity
+  );
+  if (
+    !state.cashflow.periods.some((period) => period.key === state.cashflow.selectedKey)
+  ) {
+    state.cashflow.selectedKey = state.cashflow.periods[0]
+      ? state.cashflow.periods[0].key
+      : "";
+  }
+  renderCashflowPeriods();
+  renderCashflowTable();
+}
+
+function updateCashflowSelection() {
+  const key = elements.cashflowPeriod.value;
+  state.cashflow.selectedKey = key;
+  updateCashflowActions();
+}
+
+function openCashflowPeriod() {
+  const period = state.cashflow.periods.find(
+    (item) => item.key === state.cashflow.selectedKey
+  );
+  if (!period) {
+    setCashflowStatus("Выберите период.", true);
+    return;
+  }
+  elements.startDate.value = toISODate(period.start);
+  elements.endDate.value = toISODate(period.end);
+  onDateChange();
+  setActiveTab("calc");
+  setCashflowStatus(`Открыт период: ${period.label}.`);
+}
+
+async function loadCashflow(year) {
+  if (!state.user) {
+    state.cashflow.entries = {};
+    renderCashflowTable();
+    updateCashflowActions();
+    return;
+  }
+  try {
+    const ref = doc(db, "users", state.user.uid, "cashflow", String(year));
+    const snapshot = await getDoc(ref);
+    state.cashflow.entries = snapshot.exists() ? snapshot.data().entries || {} : {};
+    renderCashflowTable();
+    updateCashflowActions();
+  } catch (error) {
+    setCashflowStatus("Не удалось загрузить кэшфлоу.", true);
+  }
+}
+
+async function saveCashflowPeriod() {
+  if (!state.user) {
+    setCashflowStatus("Нужно войти в аккаунт.", true);
+    return;
+  }
+  const period = state.cashflow.periods.find(
+    (item) => item.key === state.cashflow.selectedKey
+  );
+  if (!period) {
+    setCashflowStatus("Выберите период.", true);
+    return;
+  }
+  if (!state.lastSummary || !state.lastCalcRange) {
+    setCashflowStatus("Сначала выполните расчет.", true);
+    return;
+  }
+  const sameRange =
+    toISODate(state.lastCalcRange.start) === toISODate(period.start) &&
+    toISODate(state.lastCalcRange.end) === toISODate(period.end);
+  if (!sameRange) {
+    setCashflowStatus("Расчет выполнен для другого периода.", true);
+    return;
+  }
+  state.cashflow.entries[period.key] = {
+    marginBeforeTax: state.lastSummary.marginBeforeTax,
+    updatedAt: new Date().toISOString()
+  };
+  try {
+    const ref = doc(db, "users", state.user.uid, "cashflow", String(state.cashflow.year));
+    await setDoc(ref, { entries: state.cashflow.entries }, { merge: true });
+    renderCashflowTable();
+    setCashflowStatus("Маржа сохранена.");
+  } catch (error) {
+    setCashflowStatus("Не удалось сохранить маржу.", true);
+  }
+  updateCashflowActions();
 }
 
 function buildSebesTemplateWorkbook() {
@@ -1063,7 +1355,7 @@ function calculate() {
   const marginAfterTax5 =
     revenueBeforeTax > 0 ? (netWithTax5 - totalCost) / revenueBeforeTax : 0;
 
-  renderSummary({
+  const summary = {
     realizTotal,
     totalCost,
     otherServicesTotal,
@@ -1077,9 +1369,15 @@ function calculate() {
     tax5,
     netWithTax5,
     marginAfterTax5
-  });
+  };
+
+  state.lastSummary = summary;
+  state.lastCalcRange = { start: state.startDate, end: state.endDate };
+
+  renderSummary(summary);
 
   renderTable(rows);
+  updateCashflowActions();
   if (missingCosts.size > 0) {
     setMissingCostBlock(Array.from(missingCosts));
     setStatus("Расчет выполнен с предупреждениями.");
@@ -1223,6 +1521,7 @@ function updateAuthUI(user) {
     elements.signOutButton.disabled = !user;
   }
   updateSebesActions();
+  updateCashflowActions();
 }
 
 async function loadUserSebes(user) {
@@ -1301,8 +1600,44 @@ async function init() {
     setActiveTab("calc");
   }
 
+  if (elements.cashflowYear) {
+    const currentYear = new Date().getFullYear();
+    for (let year = currentYear - 3; year <= currentYear + 1; year += 1) {
+      const option = document.createElement("option");
+      option.value = String(year);
+      option.textContent = String(year);
+      if (year === state.cashflow.year) {
+        option.selected = true;
+      }
+      elements.cashflowYear.appendChild(option);
+    }
+    elements.cashflowYear.addEventListener("change", async () => {
+      state.cashflow.year = Number(elements.cashflowYear.value);
+      refreshCashflowView();
+      await loadCashflow(state.cashflow.year);
+    });
+  }
+  if (elements.cashflowGranularity) {
+    elements.cashflowGranularity.value = state.cashflow.granularity;
+    elements.cashflowGranularity.addEventListener("change", () => {
+      state.cashflow.granularity = elements.cashflowGranularity.value;
+      refreshCashflowView();
+    });
+  }
+  if (elements.cashflowPeriod) {
+    elements.cashflowPeriod.addEventListener("change", updateCashflowSelection);
+  }
+  if (elements.cashflowOpenPeriod) {
+    elements.cashflowOpenPeriod.addEventListener("click", openCashflowPeriod);
+  }
+  if (elements.cashflowSavePeriod) {
+    elements.cashflowSavePeriod.addEventListener("click", saveCashflowPeriod);
+  }
+
   renderSebesTable(state.sebes);
   updateSebesActions();
+  refreshCashflowView();
+  updateCashflowActions();
 
   const accrualsFallback = {
     startRow: 1,
@@ -1414,6 +1749,9 @@ async function init() {
         await loadUserSebes(state.user);
         renderSebesTable(state.sebes);
         updateSebesActions();
+        await loadCashflow(state.cashflow.year);
+        renderCashflowTable();
+        updateCashflowActions();
         setAuthStatus("");
       } catch (error) {
         const code = error && error.code ? String(error.code) : "";
@@ -1448,6 +1786,9 @@ async function init() {
     await loadUserSebes(state.user);
     renderSebesTable(state.sebes);
     updateSebesActions();
+    await loadCashflow(state.cashflow.year);
+    renderCashflowTable();
+    updateCashflowActions();
   });
 
   setAuthStatus("Готово к входу.");

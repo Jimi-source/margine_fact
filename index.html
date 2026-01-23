@@ -47,6 +47,9 @@
         <button type="button" class="tab-button" data-tab="sebes">
           Себестоимость
         </button>
+        <button type="button" class="tab-button" data-tab="cashflow">
+          Cashflow
+        </button>
       </div>
 
       <section class="card tab-panel" data-panel="calc">
@@ -161,6 +164,61 @@
           </button>
         </div>
         <div id="sebesStatus" class="status"></div>
+      </section>
+
+      <section class="card tab-panel hidden" data-panel="cashflow">
+        <h2>Cashflow</h2>
+        <p class="muted">
+          Сохраняйте маржу по периодам, чтобы видеть динамику кэшфлоу.
+        </p>
+        <div class="grid">
+          <label>
+            Год
+            <select id="cashflowYear"></select>
+          </label>
+          <label>
+            Отображение
+            <select id="cashflowGranularity">
+              <option value="day">По дням</option>
+              <option value="week" selected>По неделям</option>
+              <option value="month">По месяцам</option>
+              <option value="quarter">По кварталам</option>
+              <option value="year">За год</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid">
+          <label>
+            Период
+            <select id="cashflowPeriod"></select>
+          </label>
+          <div class="cashflow-actions">
+            <button type="button" id="cashflowOpenPeriod" class="ghost-button">
+              Открыть период в расчёте
+            </button>
+            <button type="button" id="cashflowSavePeriod" class="primary-button" disabled>
+              Сохранить маржу периода
+            </button>
+          </div>
+        </div>
+        <div id="cashflowStatus" class="status"></div>
+        <div class="table-wrap">
+          <table id="cashflowTable">
+            <thead>
+              <tr>
+                <th>Период</th>
+                <th>Маржа до налогов</th>
+              </tr>
+            </thead>
+            <tbody id="cashflowBody">
+              <tr>
+                <td colspan="2" class="muted">
+                  Выберите год и период для отображения.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
       </div>
     </main>
