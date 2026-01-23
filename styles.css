@@ -249,6 +249,25 @@ tbody tr:hover {
   font-weight: 600;
 }
 
+.sebes-import {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  margin: 16px 0;
+}
+
+.sebes-import .ghost-button {
+  margin-top: 0;
+}
+
+.sebes-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-weight: 600;
+}
+
 .sebes-table input {
   width: 100%;
   padding: 6px 8px;

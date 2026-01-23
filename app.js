@@ -128,7 +128,9 @@ const elements = {
   sebesBody: document.getElementById("sebesBody"),
   sebesStatus: document.getElementById("sebesStatus"),
   addSebesRow: document.getElementById("addSebesRow"),
-  saveSebes: document.getElementById("saveSebes")
+  saveSebes: document.getElementById("saveSebes"),
+  sebesFile: document.getElementById("sebesFile"),
+  downloadSebesTemplate: document.getElementById("downloadSebesTemplate")
 };
 
 const numberFormatter = new Intl.NumberFormat("ru-RU", {
@@ -218,6 +220,12 @@ function updateSebesActions() {
   }
   if (elements.saveSebes) {
     elements.saveSebes.disabled = !canEdit || !state.sebesDirty;
+  }
+  if (elements.sebesFile) {
+    elements.sebesFile.disabled = !canEdit;
+  }
+  if (elements.downloadSebesTemplate) {
+    elements.downloadSebesTemplate.disabled = !canEdit;
   }
 }
 
@@ -653,6 +661,8 @@ function validateElements() {
   if (!elements.sebesStatus) missing.push("sebesStatus");
   if (!elements.addSebesRow) missing.push("addSebesRow");
   if (!elements.saveSebes) missing.push("saveSebes");
+  if (!elements.sebesFile) missing.push("sebesFile");
+  if (!elements.downloadSebesTemplate) missing.push("downloadSebesTemplate");
   if (missing.length > 0) {
     setStatus("Ошибка: не найдены элементы (" + missing.join(", ") + ").", true);
     setAuthStatus("Ошибка интерфейса. Перезагрузите страницу.", true);
@@ -715,6 +725,96 @@ function getSebesFromUI() {
 function markSebesDirty() {
   state.sebesDirty = true;
   updateSebesActions();
+}
+
+function buildSebesTemplateWorkbook() {
+  const rows = [["Артикул", "Себестоимость"]];
+  const sheet = XLSXLib.utils.aoa_to_sheet(rows);
+  const workbook = XLSXLib.utils.book_new();
+  XLSXLib.utils.book_append_sheet(workbook, sheet, "Себестоимость");
+  return workbook;
+}
+
+function downloadSebesTemplate() {
+  if (!XLSXLib) {
+    setSebesStatus("Ошибка: библиотека XLSX не загрузилась.", true);
+    return;
+  }
+  const workbook = buildSebesTemplateWorkbook();
+  XLSXLib.writeFile(workbook, "sebes_template.xlsx");
+  setSebesStatus("Шаблон скачан.");
+}
+
+function detectSebesHeader(row) {
+  if (!row || row.length === 0) return null;
+  const normalized = row.map(normalizeKey);
+  const articleIndex = normalized.findIndex(
+    (key) => key.includes("артикул") || key === "sku"
+  );
+  const costIndex = normalized.findIndex(
+    (key) =>
+      key.includes("себестоим") || key.includes("стоимость") || key.includes("cost")
+  );
+  if (articleIndex === -1 || costIndex === -1) return null;
+  return { articleIndex, costIndex };
+}
+
+function extractSebesItemsFromWorkbook(workbook) {
+  let bestItems = null;
+  workbook.SheetNames.forEach((sheetName) => {
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSXLib.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+    for (let i = 0; i < rows.length; i += 1) {
+      const header = detectSebesHeader(rows[i]);
+      if (!header) continue;
+      const itemsMap = new Map();
+      for (let j = i + 1; j < rows.length; j += 1) {
+        const row = rows[j];
+        if (!row || isRowEmpty(row)) continue;
+        const article = String(row[header.articleIndex] || "").trim();
+        if (!article) continue;
+        const cost = parseOptionalNumber(row[header.costIndex]);
+        itemsMap.set(article, cost);
+      }
+      const items = Array.from(itemsMap.entries()).map(([article, cost]) => ({
+        article,
+        cost
+      }));
+      if (!bestItems || items.length > bestItems.length) {
+        bestItems = items;
+      }
+      break;
+    }
+  });
+  if (!bestItems) {
+    throw new Error("Не удалось найти заголовки Артикул и Себестоимость.");
+  }
+  return bestItems;
+}
+
+async function onSebesFileChange(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (!state.user) {
+    setSebesStatus("Нужно войти в аккаунт.", true);
+    event.target.value = "";
+    return;
+  }
+  try {
+    const workbook = await readWorkbook(file);
+    const items = extractSebesItemsFromWorkbook(workbook);
+    state.sebes = items;
+    renderSebesTable(items);
+    markSebesDirty();
+    setSebesStatus(
+      `Загружено строк: ${items.length}. Проверьте и нажмите "Сохранить".`
+    );
+  } catch (error) {
+    const message = error && error.message ? error.message : "Неизвестная ошибка";
+    setSebesStatus(`Ошибка шаблона: ${message}`, true);
+  } finally {
+    event.target.value = "";
+  }
 }
 
 function onSebesInputChange() {
@@ -1164,6 +1264,12 @@ async function init() {
   }
   if (elements.saveSebes) {
     elements.saveSebes.addEventListener("click", saveUserSebes);
+  }
+  if (elements.downloadSebesTemplate) {
+    elements.downloadSebesTemplate.addEventListener("click", downloadSebesTemplate);
+  }
+  if (elements.sebesFile) {
+    elements.sebesFile.addEventListener("change", onSebesFileChange);
   }
   if (elements.tabButtons.length > 0) {
     elements.tabButtons.forEach((button) => {
