@@ -2,11 +2,31 @@
   box-sizing: border-box;
 }
 
+:root {
+  color-scheme: light;
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --surface-muted: #f7f8fb;
+  --border: #e6e9f0;
+  --text: #0f172a;
+  --muted: #6b7280;
+  --primary: #3b5bff;
+  --primary-strong: #2f48e7;
+  --primary-soft: rgba(59, 91, 255, 0.12);
+  --success: #16a34a;
+  --warning-bg: #fff7ed;
+  --warning-border: #fed7aa;
+  --warning-text: #9a3412;
+  --shadow-sm: 0 6px 18px rgba(15, 23, 42, 0.08);
+  --shadow-md: 0 18px 50px rgba(15, 23, 42, 0.12);
+  --ring: 0 0 0 4px rgba(59, 91, 255, 0.15);
+}
+
 body {
   margin: 0;
   font-family: "Inter", "Segoe UI", system-ui, sans-serif;
-  background: #f6f7fb;
-  color: #1f2328;
+  background: radial-gradient(circle at top, #f8f9ff 0%, var(--bg) 45%);
+  color: var(--text);
 }
 
 .container {
@@ -27,12 +47,13 @@ body {
 }
 
 .auth-card {
-  background: #fff;
-  padding: 32px 36px;
-  border-radius: 18px;
+  background: var(--surface);
+  padding: 36px 40px;
+  border-radius: 22px;
   text-align: center;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
-  max-width: 420px;
+  box-shadow: var(--shadow-md);
+  max-width: 440px;
+  border: 1px solid var(--border);
 }
 
 .auth-card h1 {
@@ -64,13 +85,19 @@ body {
 }
 
 .ghost-button {
-  padding: 8px 12px;
-  border: 1px solid #cbd5f5;
-  border-radius: 10px;
-  background: #eef2ff;
-  color: #1d4ed8;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text);
   font-weight: 600;
   cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+
+.ghost-button:hover {
+  border-color: #c7d2fe;
+  background: #eef2ff;
 }
 
 .ghost-button:disabled {
@@ -85,18 +112,21 @@ body {
 }
 
 .tab-button {
-  padding: 10px 14px;
+  padding: 10px 16px;
   border-radius: 999px;
-  border: 1px solid #d0d7de;
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--surface);
   font-weight: 600;
+  color: var(--text);
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .tab-button.active {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: var(--primary);
+  border-color: var(--primary);
   color: #fff;
+  box-shadow: 0 10px 24px rgba(59, 91, 255, 0.35);
 }
 
 .tab-panel.hidden {
@@ -105,7 +135,7 @@ body {
 
 
 .muted {
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .mono {
@@ -113,10 +143,11 @@ body {
 }
 
 .card {
-  background: #fff;
-  border-radius: 16px;
-  padding: 20px 24px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 22px 26px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
   margin-bottom: 24px;
 }
 
@@ -141,10 +172,20 @@ label {
 input[type="date"],
 input[type="file"],
 select {
-  padding: 8px 10px;
-  border: 1px solid #d0d7de;
-  border-radius: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
   font-size: 14px;
+  background: var(--surface);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="date"]:focus,
+input[type="file"]:focus,
+select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: var(--ring);
 }
 
 .hint {
@@ -156,7 +197,7 @@ select {
 .status {
   margin-top: 12px;
   font-size: 14px;
-  color: #111827;
+  color: var(--text);
 }
 
 .status.error {
@@ -165,19 +206,20 @@ select {
 
 .primary-button {
   margin-top: 16px;
-  padding: 10px 16px;
+  padding: 12px 18px;
   border: none;
-  border-radius: 10px;
-  background: #2563eb;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-strong));
   color: #fff;
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+  box-shadow: 0 12px 30px rgba(59, 91, 255, 0.35);
 }
 
 .primary-button:hover {
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 16px 34px rgba(59, 91, 255, 0.4);
   transform: translateY(-1px);
 }
 
@@ -238,10 +280,10 @@ select {
   gap: 8px;
   grid-template-columns: 1.6fr repeat(4, minmax(140px, 1fr));
   align-items: center;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
 }
 
 .summary .row strong {
@@ -256,12 +298,15 @@ table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+  background: var(--surface);
+  border-radius: 14px;
+  overflow: hidden;
 }
 
 th,
 td {
-  padding: 10px 12px;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
   text-align: right;
 }
 
@@ -271,21 +316,21 @@ td:first-child {
 }
 
 thead th {
-  background: #f3f4f6;
+  background: var(--surface-muted);
   font-weight: 700;
 }
 
 tbody tr:hover {
-  background: #f9fafb;
+  background: #f7f9ff;
 }
 
 .missing-cost {
   margin-top: 16px;
   padding: 12px 14px;
-  border-radius: 10px;
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
-  color: #9a3412;
+  border-radius: 12px;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  color: var(--warning-text);
   font-weight: 600;
 }
 
@@ -311,8 +356,8 @@ tbody tr:hover {
 .sebes-table input {
   width: 100%;
   padding: 6px 8px;
-  border: 1px solid #d0d7de;
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
   font-size: 14px;
 }
 
