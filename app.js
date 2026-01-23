@@ -692,9 +692,8 @@ function getAccrualTypeOptions() {
   if (!state.accruals) return [];
   const types = new Set();
   for (const row of state.accruals) {
-    const article = row["Артикул"];
     const type = row["Тип начисления"];
-    if (!article && type) {
+    if (type) {
       types.add(String(type).trim());
     }
   }
