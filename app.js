@@ -42,54 +42,11 @@ const REALIZ_TYPES = [
   "Программы партнёров"
 ];
 
-const OTHER_SERVICES_TYPES = [
-  "Бонусы продавца",
-  "Декомпенсации и возвращение товаров на сток",
-  "Доставка и обработка возврата, отмены, невыкупа",
-  "Доставка покупателю",
-  "Доставка покупателю — отмена начисления",
-  "Звёздные товары",
-  "Кросс-докинг",
-  "Обработка брака с приемки",
-  "Оплата эквайринга",
-  "Подписка Premium",
-  "Получение возврата, отмены, невыкупа от покупателя",
-  "Потеря по вине Ozon в логистике",
-  "Услуга по бронированию места и персонала для поставки с неполным составом в составе ГМ",
-  "Услуга по обработке опознанных излишков в составе ГМ",
-  "Утилизация товара: Вы не забрали в срок",
-  "Утилизация товара: Повреждённые, были у покупателя",
-  "Потеря по вине Ozon на складе",
-  "Утилизация товара: Повреждённые из-за упаковки",
-  "Вывоз товара со склада силами Ozon: Доставка до ПВЗ",
-  "Брак по вине Ozon на складе",
-  "Эквайринг",
-  "Последняя миля",
-  "Логистика",
-  "Выручка",
-  "Программы партнёров",
-  "Баллы за скидки",
-  "Вознаграждение за продажу",
-  "Возврат выручки",
-  "Возврат вознаграждения",
-  "Обработка частичного невыкупа",
-  "Обратная логистика",
-  "Обработка возвратов, отмен и невыкупов партнёрами",
-  "Обработка отменённых и невостребованных товаров",
-  "Обработка возвратов Ozon",
-  "Бронирование места и персонала для поставки с неполным составом в составе грузоместа",
-  "Логистика - отмена начисления",
-  "Подготовка товаров к возврату",
-  "Подготовка товара к вывозу: Брак",
-  "Доставка до места выдачи",
-  "Временное размещение товара в СЦ/ПВЗ",
-  "Временное размещение товара партнерами",
-  "Декомпенсации и возвращение товаров на склад",
-  "Доставка до места выдачи - отмена начисления",
-  "Обработка опознанных излишков в составе грузоместа",
-  "Утилизация товара: Автоутилизация со стока",
-  "Реклама в сети Интернет на Сайте"
-];
+const OTHER_SERVICES_EXCLUDED = new Set([
+  "Продвижение в поиске",
+  "Трафареты",
+  "Продвижение с оплатой за заказ"
+]);
 
 const state = {
   startDate: null,
@@ -101,7 +58,9 @@ const state = {
   sebes: [],
   earliestAccrualDate: null,
   user: null,
-  sebesDirty: false
+  sebesDirty: false,
+  otherServicesTypes: [],
+  otherServicesTypesSelected: new Set()
 };
 
 const elements = {
@@ -130,7 +89,8 @@ const elements = {
   addSebesRow: document.getElementById("addSebesRow"),
   saveSebes: document.getElementById("saveSebes"),
   sebesFile: document.getElementById("sebesFile"),
-  downloadSebesTemplate: document.getElementById("downloadSebesTemplate")
+  downloadSebesTemplate: document.getElementById("downloadSebesTemplate"),
+  otherServicesFilter: document.getElementById("otherServicesFilter")
 };
 
 const numberFormatter = new Intl.NumberFormat("ru-RU", {
@@ -663,6 +623,7 @@ function validateElements() {
   if (!elements.saveSebes) missing.push("saveSebes");
   if (!elements.sebesFile) missing.push("sebesFile");
   if (!elements.downloadSebesTemplate) missing.push("downloadSebesTemplate");
+  if (!elements.otherServicesFilter) missing.push("otherServicesFilter");
   if (missing.length > 0) {
     setStatus("Ошибка: не найдены элементы (" + missing.join(", ") + ").", true);
     setAuthStatus("Ошибка интерфейса. Перезагрузите страницу.", true);
@@ -725,6 +686,68 @@ function getSebesFromUI() {
 function markSebesDirty() {
   state.sebesDirty = true;
   updateSebesActions();
+}
+
+function getAccrualTypeOptions() {
+  if (!state.accruals) return [];
+  const types = new Set();
+  for (const row of state.accruals) {
+    const article = row["Артикул"];
+    const type = row["Тип начисления"];
+    if (!article && type) {
+      types.add(String(type).trim());
+    }
+  }
+  return Array.from(types).filter(Boolean).sort();
+}
+
+function renderOtherServicesFilter() {
+  if (!elements.otherServicesFilter) return;
+  if (!state.accruals) {
+    elements.otherServicesFilter.textContent =
+      'Загрузите отчет "Начисления", чтобы увидеть список типов.';
+    return;
+  }
+  if (state.otherServicesTypes.length === 0) {
+    elements.otherServicesFilter.textContent =
+      "Нет строк без артикула для расчета прочих услуг.";
+    return;
+  }
+  elements.otherServicesFilter.innerHTML = "";
+  state.otherServicesTypes.forEach((type) => {
+    const id = `other-type-${normalizeKey(type)}`;
+    const label = document.createElement("label");
+    label.innerHTML = `
+      <input type="checkbox" data-other-type="${type}" id="${id}">
+      <span>${type}</span>
+    `;
+    const checkbox = label.querySelector("input");
+    checkbox.checked = state.otherServicesTypesSelected.has(type);
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) {
+        state.otherServicesTypesSelected.add(type);
+      } else {
+        state.otherServicesTypesSelected.delete(type);
+      }
+      setSebesStatus("");
+    });
+    elements.otherServicesFilter.appendChild(label);
+  });
+}
+
+function updateOtherServicesTypes() {
+  const availableTypes = getAccrualTypeOptions();
+  const nextSelected = new Set();
+  availableTypes.forEach((type) => {
+    if (state.otherServicesTypesSelected.has(type)) {
+      nextSelected.add(type);
+    } else if (!OTHER_SERVICES_EXCLUDED.has(type)) {
+      nextSelected.add(type);
+    }
+  });
+  state.otherServicesTypes = availableTypes;
+  state.otherServicesTypesSelected = nextSelected;
+  renderOtherServicesFilter();
 }
 
 function buildSebesTemplateWorkbook() {
@@ -846,7 +869,7 @@ function calculate() {
 
   const accrualsByArticle = new Map();
   const adsByArticle = new Map();
-  const otherServicesTypeSet = new Set(OTHER_SERVICES_TYPES);
+  const otherServicesTypeSet = new Set(state.otherServicesTypesSelected);
   const realizTypeSet = new Set(REALIZ_TYPES);
 
   let otherServicesTotal = 0;
@@ -1146,6 +1169,7 @@ function onFileChange(type, schema, fallback) {
           .sort((a, b) => a - b);
         state.earliestAccrualDate = dates.length > 0 ? dates[0] : null;
         updateDateHint();
+        updateOtherServicesTypes();
       }
       updateStatus();
     } catch (error) {

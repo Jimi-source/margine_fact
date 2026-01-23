@@ -193,6 +193,33 @@ input[type="file"] {
   margin-bottom: 16px;
 }
 
+.other-services-filter {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+}
+
+.filter-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.filter-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+}
+
+.filter-list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
 .summary .row {
   display: grid;
   gap: 8px;
