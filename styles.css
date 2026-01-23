@@ -3,29 +3,29 @@
 }
 
 :root {
-  color-scheme: light;
-  --bg: #f4f6fb;
-  --surface: #ffffff;
-  --surface-muted: #f7f8fb;
-  --border: #e6e9f0;
-  --text: #0f172a;
-  --muted: #6b7280;
-  --primary: #3b5bff;
-  --primary-strong: #2f48e7;
-  --primary-soft: rgba(59, 91, 255, 0.12);
-  --success: #16a34a;
-  --warning-bg: #fff7ed;
-  --warning-border: #fed7aa;
-  --warning-text: #9a3412;
-  --shadow-sm: 0 6px 18px rgba(15, 23, 42, 0.08);
-  --shadow-md: 0 18px 50px rgba(15, 23, 42, 0.12);
-  --ring: 0 0 0 4px rgba(59, 91, 255, 0.15);
+  color-scheme: dark;
+  --bg: #0b0f16;
+  --surface: #111826;
+  --surface-muted: #151c2a;
+  --border: #202a3a;
+  --text: #e6edf6;
+  --muted: #93a4bf;
+  --primary: #4c6fff;
+  --primary-strong: #3b5bff;
+  --primary-soft: rgba(76, 111, 255, 0.2);
+  --success: #22c55e;
+  --warning-bg: rgba(249, 115, 22, 0.15);
+  --warning-border: rgba(249, 115, 22, 0.4);
+  --warning-text: #fdba74;
+  --shadow-sm: 0 8px 26px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 20px 60px rgba(0, 0, 0, 0.45);
+  --ring: 0 0 0 3px rgba(76, 111, 255, 0.3);
 }
 
 body {
   margin: 0;
   font-family: "Inter", "Segoe UI", system-ui, sans-serif;
-  background: radial-gradient(circle at top, #f8f9ff 0%, var(--bg) 45%);
+  background: radial-gradient(circle at top, #1c2637 0%, var(--bg) 50%);
   color: var(--text);
 }
 
@@ -96,8 +96,8 @@ body {
 }
 
 .ghost-button:hover {
-  border-color: #c7d2fe;
-  background: #eef2ff;
+  border-color: rgba(76, 111, 255, 0.6);
+  background: rgba(76, 111, 255, 0.12);
 }
 
 .ghost-button:disabled {
@@ -177,6 +177,7 @@ select {
   border-radius: 12px;
   font-size: 14px;
   background: var(--surface);
+  color: var(--text);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -215,7 +216,7 @@ select:focus {
   font-weight: 700;
   cursor: pointer;
   transition: transform 0.1s ease, box-shadow 0.15s ease;
-  box-shadow: 0 12px 30px rgba(59, 91, 255, 0.35);
+  box-shadow: 0 14px 34px rgba(59, 91, 255, 0.3);
 }
 
 .primary-button:hover {
@@ -224,7 +225,7 @@ select:focus {
 }
 
 .primary-button:disabled {
-  background: #94a3b8;
+  background: #394458;
   cursor: not-allowed;
   box-shadow: none;
   transform: none;
@@ -321,7 +322,7 @@ thead th {
 }
 
 tbody tr:hover {
-  background: #f7f9ff;
+  background: rgba(76, 111, 255, 0.08);
 }
 
 .missing-cost {
