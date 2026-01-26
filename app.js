@@ -256,9 +256,9 @@ function scoreHeaderRow(row, schema) {
   return { score: matched, matched, missing: requiredMissing };
 }
 
-function pickBestHeaderRow(rows, schema) {
+function pickBestHeaderRow(rows, schema, startIndex = 0) {
   let best = { idx: -1, score: 0, missing: Infinity };
-  for (let i = 0; i < rows.length; i += 1) {
+  for (let i = startIndex; i < rows.length; i += 1) {
     const { score, missing } = scoreHeaderRow(rows[i], schema);
     if (score > best.score || (score === best.score && missing < best.missing)) {
       best = { idx: i, score, missing };
@@ -267,12 +267,12 @@ function pickBestHeaderRow(rows, schema) {
   return best;
 }
 
-function extractRowsBySchemaFromSheet(sheet, schema) {
+function extractRowsBySchemaFromSheet(sheet, schema, startIndex) {
   const rows = XLSXLib.utils.sheet_to_json(sheet, {
     header: 1,
     defval: ""
   });
-  const best = pickBestHeaderRow(rows, schema);
+  const best = pickBestHeaderRow(rows, schema, startIndex);
   if (best.idx === -1 || best.missing > 0) {
     return { data: null, headerIndex: -1, score: best.score, missing: best.missing };
   }
@@ -300,12 +300,12 @@ function extractRowsBySchemaFromSheet(sheet, schema) {
   return { data, headerIndex: best.idx, score: best.score, missing: 0 };
 }
 
-function extractRowsBySchema(workbook, schema) {
+function extractRowsBySchema(workbook, schema, startIndex) {
   let bestResult = null;
   let bestSheet = null;
   workbook.SheetNames.forEach((sheetName) => {
     const sheet = workbook.Sheets[sheetName];
-    const result = extractRowsBySchemaFromSheet(sheet, schema);
+    const result = extractRowsBySchemaFromSheet(sheet, schema, startIndex);
     if (result.data && (!bestResult || result.score > bestResult.score)) {
       bestResult = result;
       bestSheet = sheetName;
@@ -329,12 +329,13 @@ function normalizeSchema(schema) {
   }));
 }
 
-function extractRowsByPositionsFromSheet(sheet, schema, fallback) {
+function extractRowsByPositionsFromSheet(sheet, schema, fallback, minStartRow) {
   const rows = XLSXLib.utils.sheet_to_json(sheet, {
     header: 1,
     defval: ""
   });
-  let startRow = fallback.startRow || 1;
+  const baseStart = fallback.startRow || 0;
+  let startRow = Math.max(minStartRow || 0, baseStart);
   const headerScore = scoreHeaderRow(rows[startRow], schema);
   const requiredCount = schema.filter((item) => item.required).length;
   if (headerScore.matched >= requiredCount) {
@@ -353,9 +354,9 @@ function extractRowsByPositionsFromSheet(sheet, schema, fallback) {
   return data;
 }
 
-function extractRowsBySchemaOrPositions(workbook, schema, fallback) {
+function extractRowsBySchemaOrPositions(workbook, schema, fallback, startIndex, minStartRow) {
   try {
-    return extractRowsBySchema(workbook, schema);
+    return extractRowsBySchema(workbook, schema, startIndex);
   } catch (error) {
     if (!fallback) throw error;
   }
@@ -363,7 +364,7 @@ function extractRowsBySchemaOrPositions(workbook, schema, fallback) {
   let bestSheet = null;
   workbook.SheetNames.forEach((sheetName) => {
     const sheet = workbook.Sheets[sheetName];
-    const data = extractRowsByPositionsFromSheet(sheet, schema, fallback);
+    const data = extractRowsByPositionsFromSheet(sheet, schema, fallback, minStartRow);
     if (data.length > 0 && (!bestData || data.length > bestData.length)) {
       bestData = data;
       bestSheet = sheetName;
@@ -1455,10 +1456,14 @@ function onFileChange(type, schema, fallback) {
     if (!file) return;
     try {
       const workbook = await readWorkbook(file);
+      const headerStartIndex = type === "accruals" ? 1 : 0;
+      const minStartRow = type === "accruals" ? 1 : 0;
       const data = extractRowsBySchemaOrPositions(
         workbook,
         normalizeSchema(schema),
-        fallback
+        fallback,
+        headerStartIndex,
+        minStartRow
       );
       state[type] = data;
       if (type === "accruals") {
