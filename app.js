@@ -487,13 +487,15 @@ function detectHeader(headers, predicate) {
 }
 
 function detectExpenseHeader(headers) {
+  const isSalesHeader = (key) =>
+    key.includes("продажи") || key.includes("sales") || key.includes("sale");
   return (
-    detectHeader(headers, (key) => key.includes("расход")) ||
+    detectHeader(headers, (key) => key.includes("расход") && !isSalesHeader(key)) ||
     detectHeader(
       headers,
-      (key) => key.includes("стоимость") && !key.includes("продажи")
+      (key) => key.includes("стоимость") && !isSalesHeader(key)
     ) ||
-    detectHeader(headers, (key) => key.includes("сумма"))
+    detectHeader(headers, (key) => key.includes("сумма") && !isSalesHeader(key))
   );
 }
 
