@@ -267,6 +267,14 @@ function pickBestHeaderRow(rows, schema) {
   return best;
 }
 
+function findColumnIndexByKeys(normalizedHeaders, keys) {
+  for (const key of keys) {
+    const idx = normalizedHeaders.findIndex((cell) => cell.includes(key));
+    if (idx >= 0) return idx;
+  }
+  return -1;
+}
+
 function extractRowsBySchemaFromSheet(sheet, schema) {
   const rows = XLSXLib.utils.sheet_to_json(sheet, {
     header: 1,
@@ -280,9 +288,7 @@ function extractRowsBySchemaFromSheet(sheet, schema) {
   const normalized = headerRow.map(normalizeKey);
   const columnMap = new Map();
   schema.forEach((item) => {
-    const idx = normalized.findIndex((cell) =>
-      item.keys.some((key) => cell.includes(key))
-    );
+    const idx = findColumnIndexByKeys(normalized, item.keys);
     if (idx >= 0) {
       columnMap.set(idx, item.name);
     }
@@ -1291,13 +1297,6 @@ function calculate() {
     );
   }
 
-  const adsColumnPresent = state.accruals.some(
-    (row) => row["Реклама"] !== undefined && row["Реклама"] !== null && row["Реклама"] !== ""
-  );
-  const statusColumnPresent = state.accruals.some(
-    (row) => row["Статус"] !== undefined && row["Статус"] !== null && row["Статус"] !== ""
-  );
-
   for (const row of state.accruals) {
     const orderOrShipmentId = row["ID начисления"];
     const articleRaw = row["Артикул"];
@@ -1337,8 +1336,7 @@ function calculate() {
     const countKey = `${article}__${dateKey(dateValue)}`;
     const count = accrualCountByArticleDate.get(countKey) || 0;
     const stencilValue = count > 0 ? stencilSum / count : 0;
-    const adsCalculated = pvpValue + stencilValue;
-    const adsFromColumn = parseNumber(row["Реклама"]);
+    const adsValue = pvpValue + stencilValue;
 
     if (statusScore === 1 && article) {
       accrualsByArticle.set(
@@ -1347,12 +1345,7 @@ function calculate() {
       );
     }
 
-    const accrualStatus = getAccrualStatus(row);
-    const statusFlag =
-      statusColumnPresent && Number.isFinite(accrualStatus) && accrualStatus !== null
-        ? accrualStatus
-        : statusScore;
-    const adsValue = adsColumnPresent ? adsFromColumn : adsCalculated;
+    const statusFlag = statusScore;
     if (statusFlag === 1 && article) {
       adsByArticle.set(article, (adsByArticle.get(article) || 0) + adsValue);
     }
