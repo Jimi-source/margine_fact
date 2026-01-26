@@ -1207,20 +1207,19 @@ function calculate() {
   let otherServicesTotal = 0;
   let realizTotal = 0;
 
+  const pvpData = buildPvpSumByOrderArticle(state.pvp);
   const stencilData = buildStencilSumByDateName(state.stencils);
-  const warnings = [stencilData.warning].filter(Boolean);
+  const warnings = [pvpData.warning, stencilData.warning].filter(Boolean);
   if (warnings.length > 0) {
     setStatus(warnings.join(" "), true);
   }
 
   const orderStatusByOrder = new Map();
   const orderStatusByShipment = new Map();
+  const orderCountByOrderArticle = new Map();
   const orderPromotionByShipmentArticle = new Map();
   const orderPromotionByOrderArticle = new Map();
   const ordersByArticle = new Map();
-
-  const ordersHeaders = state.orders && state.orders[0] ? Object.keys(state.orders[0]) : [];
-  const promotionHeader = detectPromotionHeader(ordersHeaders) || "Продвижение";
 
   for (const row of state.orders) {
     const orderNumber = row["Номер заказа"];
@@ -1240,27 +1239,42 @@ function calculate() {
     if (shipmentNumber && !orderStatusByShipment.has(shipmentNumber)) {
       orderStatusByShipment.set(shipmentNumber, status);
     }
+    if (orderNumber && article) {
+      const key = `${orderNumber}__${article}`;
+      orderCountByOrderArticle.set(
+        key,
+        (orderCountByOrderArticle.get(key) || 0) + 1
+      );
+    }
+
     if (String(status || "").toLowerCase() === "доставлен") {
       if (inRange(deliveryDate, state.startDate, state.endDate) && article) {
         ordersByArticle.set(article, (ordersByArticle.get(article) || 0) + qty);
       }
     }
+  }
 
-    const promotionValue = parseNumber(row[promotionHeader]);
-    if (shipmentNumber && article && promotionValue) {
+  for (const row of state.orders) {
+    const orderNumber = row["Номер заказа"];
+    const shipmentNumber = row["Номер отправления"];
+    const article = row["Артикул"];
+    if (!orderNumber || !article) continue;
+    const key = `${orderNumber}__${article}`;
+    const totalPromotion = pvpData.sumByKey.get(key) || 0;
+    const count = orderCountByOrderArticle.get(key) || 0;
+    const promotionPerRow = count > 0 ? totalPromotion / count : 0;
+    if (shipmentNumber) {
       const shipKey = `${shipmentNumber}__${article}`;
       orderPromotionByShipmentArticle.set(
         shipKey,
-        (orderPromotionByShipmentArticle.get(shipKey) || 0) + promotionValue
+        (orderPromotionByShipmentArticle.get(shipKey) || 0) + promotionPerRow
       );
     }
-    if (orderNumber && article && promotionValue) {
-      const orderKey = `${orderNumber}__${article}`;
-      orderPromotionByOrderArticle.set(
-        orderKey,
-        (orderPromotionByOrderArticle.get(orderKey) || 0) + promotionValue
-      );
-    }
+    const orderKey = `${orderNumber}__${article}`;
+    orderPromotionByOrderArticle.set(
+      orderKey,
+      (orderPromotionByOrderArticle.get(orderKey) || 0) + promotionPerRow
+    );
   }
 
   const accrualCountByArticleDate = new Map();
@@ -1276,6 +1290,13 @@ function calculate() {
       (accrualCountByArticleDate.get(key) || 0) + 1
     );
   }
+
+  const adsColumnPresent = state.accruals.some(
+    (row) => row["Реклама"] !== undefined && row["Реклама"] !== null && row["Реклама"] !== ""
+  );
+  const statusColumnPresent = state.accruals.some(
+    (row) => row["Статус"] !== undefined && row["Статус"] !== null && row["Статус"] !== ""
+  );
 
   for (const row of state.accruals) {
     const orderOrShipmentId = row["ID начисления"];
@@ -1316,7 +1337,8 @@ function calculate() {
     const countKey = `${article}__${dateKey(dateValue)}`;
     const count = accrualCountByArticleDate.get(countKey) || 0;
     const stencilValue = count > 0 ? stencilSum / count : 0;
-    const ads = pvpValue + stencilValue;
+    const adsCalculated = pvpValue + stencilValue;
+    const adsFromColumn = parseNumber(row["Реклама"]);
 
     if (statusScore === 1 && article) {
       accrualsByArticle.set(
@@ -1327,11 +1349,12 @@ function calculate() {
 
     const accrualStatus = getAccrualStatus(row);
     const statusFlag =
-      Number.isFinite(accrualStatus) && accrualStatus !== null
+      statusColumnPresent && Number.isFinite(accrualStatus) && accrualStatus !== null
         ? accrualStatus
         : statusScore;
+    const adsValue = adsColumnPresent ? adsFromColumn : adsCalculated;
     if (statusFlag === 1 && article) {
-      adsByArticle.set(article, (adsByArticle.get(article) || 0) + ads);
+      adsByArticle.set(article, (adsByArticle.get(article) || 0) + adsValue);
     }
 
     if (!article && otherServicesTypeSet.has(type)) {
@@ -1750,6 +1773,7 @@ async function init() {
       { name: "Тип начисления", keys: ["типначисления"], required: true },
       { name: "Название товара", keys: ["названиетовара", "наименованиетовара"], required: false },
       { name: "Сумма итого, руб.", keys: ["суммаитого", "суммаитогоруб"], required: true },
+      { name: "Реклама", keys: ["реклама"], required: false },
       { name: "Статус", keys: ["статус"], required: false }
     ], accrualsFallback)
   );
