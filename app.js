@@ -68,7 +68,8 @@ const state = {
     granularity: "week",
     periods: [],
     selectedKey: "",
-    entries: {}
+    entries: {},
+    saveTimer: null
   }
 };
 
@@ -971,24 +972,140 @@ function renderCashflowPeriods() {
   updateCashflowActions();
 }
 
+function getCashflowEntry(key) {
+  if (!key) return {};
+  return state.cashflow.entries[key] || {};
+}
+
+function setCashflowEntry(key, updates) {
+  if (!key) return;
+  state.cashflow.entries[key] = {
+    ...getCashflowEntry(key),
+    ...updates,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function formatOptionalNumber(value) {
+  return Number.isFinite(value) ? formatNumber(value) : "—";
+}
+
+function formatInputValue(value) {
+  return Number.isFinite(value) ? String(value) : "";
+}
+
+async function persistCashflowEntries() {
+  if (!state.user) return;
+  const ref = doc(db, "users", state.user.uid, "cashflow", String(state.cashflow.year));
+  await setDoc(ref, { entries: state.cashflow.entries }, { merge: true });
+}
+
+function scheduleCashflowSave(message) {
+  if (!state.user) return;
+  if (state.cashflow.saveTimer) {
+    clearTimeout(state.cashflow.saveTimer);
+  }
+  state.cashflow.saveTimer = setTimeout(async () => {
+    try {
+      await persistCashflowEntries();
+      if (message) {
+        setCashflowStatus(message);
+      }
+    } catch (error) {
+      setCashflowStatus("Не удалось сохранить кэшфлоу.", true);
+    }
+  }, 600);
+}
+
+function onCashflowEntryChange(event) {
+  const target = event.target;
+  if (!target || !target.dataset.cashflowField) return;
+  const key = target.dataset.cashflowKey;
+  const field = target.dataset.cashflowField;
+  const value = parseOptionalNumber(target.value);
+  setCashflowEntry(key, { [field]: value });
+  renderCashflowTable();
+  scheduleCashflowSave("Кэшфлоу сохранен.");
+}
+
 function renderCashflowTable() {
   if (!elements.cashflowBody) return;
   if (state.cashflow.periods.length === 0) {
     elements.cashflowBody.innerHTML = `
       <tr>
-        <td colspan="2">Нет данных для отображения.</td>
+        <td colspan="9">Нет данных для отображения.</td>
       </tr>
     `;
     return;
   }
+  let cumulativeProcurement = 0;
+  let cumulativeTaxes = 0;
   elements.cashflowBody.innerHTML = state.cashflow.periods
     .map((period) => {
-      const entry = state.cashflow.entries[period.key];
-      const margin = entry ? formatPercent(entry.marginBeforeTax) : "—";
+      const entry = getCashflowEntry(period.key);
+      const margin = Number.isFinite(entry.marginBeforeTax)
+        ? formatPercent(entry.marginBeforeTax)
+        : "—";
+      const accruals = Number.isFinite(entry.accrualsManual) ? entry.accrualsManual : null;
+      const procurementCalc =
+        accruals !== null && Number.isFinite(entry.marginBeforeTax)
+          ? accruals * (1 - entry.marginBeforeTax)
+          : null;
+      const taxesCalc = accruals !== null ? accruals * 0.06 : null;
+      const procurementActual = Number.isFinite(entry.procurementActual)
+        ? entry.procurementActual
+        : null;
+      const taxesActual = Number.isFinite(entry.taxesActual) ? entry.taxesActual : null;
+      const procurementForTotal =
+        procurementActual !== null ? procurementActual : procurementCalc;
+      const taxesForTotal = taxesActual !== null ? taxesActual : taxesCalc;
+      if (Number.isFinite(procurementForTotal)) {
+        cumulativeProcurement += procurementForTotal;
+      }
+      if (Number.isFinite(taxesForTotal)) {
+        cumulativeTaxes += taxesForTotal;
+      }
       return `
         <tr>
           <td>${period.label}</td>
           <td>${margin}</td>
+          <td>
+            <input
+              class="cashflow-input"
+              type="number"
+              step="0.01"
+              data-cashflow-key="${period.key}"
+              data-cashflow-field="accrualsManual"
+              value="${formatInputValue(entry.accrualsManual)}"
+              placeholder="0"
+            />
+          </td>
+          <td>${formatOptionalNumber(procurementCalc)}</td>
+          <td>${formatOptionalNumber(taxesCalc)}</td>
+          <td>
+            <input
+              class="cashflow-input"
+              type="number"
+              step="0.01"
+              data-cashflow-key="${period.key}"
+              data-cashflow-field="procurementActual"
+              value="${formatInputValue(entry.procurementActual)}"
+              placeholder="0"
+            />
+          </td>
+          <td>
+            <input
+              class="cashflow-input"
+              type="number"
+              step="0.01"
+              data-cashflow-key="${period.key}"
+              data-cashflow-field="taxesActual"
+              value="${formatInputValue(entry.taxesActual)}"
+              placeholder="0"
+            />
+          </td>
+          <td>${formatOptionalNumber(cumulativeProcurement)}</td>
+          <td>${formatOptionalNumber(cumulativeTaxes)}</td>
         </tr>
       `;
     })
@@ -1073,13 +1190,11 @@ async function saveCashflowPeriod() {
     setCashflowStatus("Расчет выполнен для другого периода.", true);
     return;
   }
-  state.cashflow.entries[period.key] = {
-    marginBeforeTax: state.lastSummary.marginBeforeTax,
-    updatedAt: new Date().toISOString()
-  };
+  setCashflowEntry(period.key, {
+    marginBeforeTax: state.lastSummary.marginBeforeTax
+  });
   try {
-    const ref = doc(db, "users", state.user.uid, "cashflow", String(state.cashflow.year));
-    await setDoc(ref, { entries: state.cashflow.entries }, { merge: true });
+    await persistCashflowEntries();
     renderCashflowTable();
     setCashflowStatus("Маржа сохранена.");
   } catch (error) {
@@ -1689,6 +1804,9 @@ async function init() {
   }
   if (elements.cashflowSavePeriod) {
     elements.cashflowSavePeriod.addEventListener("click", saveCashflowPeriod);
+  }
+  if (elements.cashflowBody) {
+    elements.cashflowBody.addEventListener("change", onCashflowEntryChange);
   }
 
   renderSebesTable(state.sebes);
