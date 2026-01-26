@@ -1047,9 +1047,12 @@ function renderCashflowTable() {
         ? formatPercent(entry.marginBeforeTax)
         : "—";
       const accruals = Number.isFinite(entry.accrualsManual) ? entry.accrualsManual : null;
+      const marginForCalc = Number.isFinite(entry.marginBeforeTax)
+        ? Math.round(entry.marginBeforeTax * 10000) / 10000
+        : null;
       const procurementCalc =
-        accruals !== null && Number.isFinite(entry.marginBeforeTax)
-          ? accruals * (1 - entry.marginBeforeTax)
+        accruals !== null && marginForCalc !== null
+          ? accruals * (1 - marginForCalc)
           : null;
       const taxesCalc = accruals !== null ? accruals * 0.06 : null;
       const procurementActual = Number.isFinite(entry.procurementActual)
