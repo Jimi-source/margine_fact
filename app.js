@@ -1056,14 +1056,17 @@ function renderCashflowTable() {
         ? entry.procurementActual
         : null;
       const taxesActual = Number.isFinite(entry.taxesActual) ? entry.taxesActual : null;
-      const procurementForTotal =
-        procurementActual !== null ? procurementActual : procurementCalc;
-      const taxesForTotal = taxesActual !== null ? taxesActual : taxesCalc;
-      if (Number.isFinite(procurementForTotal)) {
-        cumulativeProcurement += procurementForTotal;
+      if (Number.isFinite(procurementCalc)) {
+        cumulativeProcurement += procurementCalc;
       }
-      if (Number.isFinite(taxesForTotal)) {
-        cumulativeTaxes += taxesForTotal;
+      if (Number.isFinite(procurementActual)) {
+        cumulativeProcurement -= procurementActual;
+      }
+      if (Number.isFinite(taxesCalc)) {
+        cumulativeTaxes += taxesCalc;
+      }
+      if (Number.isFinite(taxesActual)) {
+        cumulativeTaxes -= taxesActual;
       }
       return `
         <tr>
