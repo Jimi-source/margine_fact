@@ -232,10 +232,21 @@ function buildLegacyCharMap(headerRow, positions) {
     if (typeof rawHeader !== "string") return;
     const from = String(rawHeader).trim();
     const to = String(name).trim();
-    if (!from || from.length !== to.length) return;
-    for (let i = 0; i < from.length; i += 1) {
-      const src = from[i];
-      const dest = to[i];
+    if (!from) return;
+    const fromChars = Array.from(from);
+    const toChars = Array.from(to);
+    let sourceChars = fromChars;
+    let targetChars = toChars;
+    if (fromChars.length !== toChars.length) {
+      const filteredFrom = fromChars.filter((ch) => ch.trim() !== "");
+      const filteredTo = toChars.filter((ch) => ch.trim() !== "");
+      if (filteredFrom.length !== filteredTo.length) return;
+      sourceChars = filteredFrom;
+      targetChars = filteredTo;
+    }
+    for (let i = 0; i < sourceChars.length; i += 1) {
+      const src = sourceChars[i];
+      const dest = targetChars[i];
       if (!(src in map)) {
         map[src] = dest;
       }
@@ -283,20 +294,33 @@ function buildLegacyCharMapFromWorkbook(
       header: 1,
       defval: ""
     });
-    let headerIndex = headerIndexHint;
-    if (headerIndex === null || headerIndex === undefined) {
-      const maxIndex = Math.max(
-        minStartRow || 0,
-        fallback.startRow || 0
-      );
-      headerIndex = findHeaderRowIndex(rows, maxIndex);
+    const indicesToTry = new Set();
+    if (headerIndexHint !== null && headerIndexHint !== undefined) {
+      indicesToTry.add(headerIndexHint);
     }
-    if (headerIndex === null) return;
-    const candidate = buildLegacyCharMap(rows[headerIndex], fallback.positions);
-    if (!candidate) return;
-    if (!best || candidate.hits > best.hits) {
-      best = candidate;
+    const maxIndex = Math.max(minStartRow || 0, fallback.startRow || 0) + 2;
+    const safeMax = Math.min(rows.length - 1, maxIndex);
+    for (let i = 0; i <= safeMax; i += 1) {
+      indicesToTry.add(i);
     }
+    const autoIndex = findHeaderRowIndex(rows, safeMax);
+    if (autoIndex !== null && autoIndex !== undefined) {
+      indicesToTry.add(autoIndex);
+    }
+    indicesToTry.forEach((headerIndex) => {
+      if (headerIndex === null || headerIndex === undefined) return;
+      const candidate = buildLegacyCharMap(rows[headerIndex], fallback.positions);
+      if (!candidate) return;
+      if (!best || candidate.hits > best.hits) {
+        best = candidate;
+      } else if (
+        best &&
+        candidate.hits === best.hits &&
+        Object.keys(candidate.map).length > Object.keys(best.map).length
+      ) {
+        best = candidate;
+      }
+    });
   });
   return best ? best.map : null;
 }
@@ -565,6 +589,12 @@ function parseOptionalNumber(value) {
   const cleaned = text.replace(/\s/g, "").replace(",", ".");
   const parsed = Number(cleaned);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeId(value) {
+  if (value === null || value === undefined) return "";
+  const text = String(value).trim();
+  return text;
 }
 
 function parseDateValue(value) {
@@ -1351,15 +1381,15 @@ function calculate() {
   const skuToArticle = new Map();
 
   for (const row of state.orders) {
-    const orderNumber = row["Номер заказа"];
-    const shipmentNumber = row["Номер отправления"];
-    const article = row["Артикул"];
+    const orderNumber = normalizeId(row["Номер заказа"]);
+    const shipmentNumber = normalizeId(row["Номер отправления"]);
+    const article = normalizeId(row["Артикул"]);
     const skuRaw = row["SKU"];
     const sku =
       skuRaw === "" || skuRaw === null || skuRaw === undefined
         ? ""
         : String(skuRaw).trim();
-    const status = row["Статус"];
+    const status = normalizeId(row["Статус"]);
     const deliveryDateValue = getRowValue(row, [
       "Delivery date",
       "Дата доставки"
@@ -1392,9 +1422,9 @@ function calculate() {
   }
 
   for (const row of state.orders) {
-    const orderNumber = row["Номер заказа"];
-    const shipmentNumber = row["Номер отправления"];
-    const article = row["Артикул"];
+    const orderNumber = normalizeId(row["Номер заказа"]);
+    const shipmentNumber = normalizeId(row["Номер отправления"]);
+    const article = normalizeId(row["Артикул"]);
     if (!orderNumber || !article) continue;
     const key = `${orderNumber}__${article}`;
     const totalPromotion = pvpData.sumByKey.get(key) || 0;
@@ -1441,7 +1471,7 @@ function calculate() {
   }
 
   for (const row of state.accruals) {
-    const orderOrShipmentId = row["ID начисления"];
+    const orderOrShipmentId = normalizeId(row["ID начисления"]);
     const articleRaw = row["Артикул"];
     const skuRaw = row["SKU"];
     const sku =
