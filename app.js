@@ -48,85 +48,10 @@ const OTHER_SERVICES_EXCLUDED = new Set([
   "Продвижение с оплатой за заказ"
 ]);
 
-const ACCRUAL_TYPE_DICTIONARY = [
-  "Баллы за скидки",
-  "Бонусы продавца",
-  "Бронирование места и персонала для поставки с неполным составом в составе грузоместа",
-  "Возврат вознаграждения",
-  "Возврат выручки",
-  "Вознаграждение за продажу",
-  "Выручка",
-  "Доставка до места выдачи",
-  "Звёздные товары",
-  "Кросс-докинг",
-  "Логистика",
-  "Обработка возвратов Ozon",
-  "Обработка возвратов, отмен и невыкупов партнёрами",
-  "Обработка отменённых и невостребованных товаров",
-  "Обратная логистика",
-  "Программы партнёров",
-  "Эквайринг",
-  "Продвижение в поиске",
-  "Трафареты",
-  "Продвижение с оплатой за заказ",
-  "Реклама в сети Интернет на Сайте",
-  "Реклама в сети интернет на Сайте"
-];
-
-const LEGACY_CHAR_MAP = {
-  "\u0010": "А",
-  "\u0011": "Б",
-  "\u0012": "В",
-  "\u0013": "Г",
-  "\u0014": "Д",
-  "\u0017": "З",
-  "\u0018": "И",
-  "\u001a": "К",
-  "\u001b": "Л",
-  "\u001d": "Н",
-  "\u001e": "О",
-  "\u001f": "П",
-  "!": "С",
-  "\"": "Т",
-  "#": "У",
-  "&": "Ц",
-  "'": "Ч",
-  "-": "Э",
-  "0": "а",
-  "1": "б",
-  "2": "в",
-  "3": "г",
-  "4": "д",
-  "5": "е",
-  "6": "ж",
-  "7": "з",
-  "8": "и",
-  "9": "й",
-  ":": "к",
-  ";": "л",
-  "<": "м",
-  "=": "н",
-  ">": "о",
-  "?": "п",
-  "@": "р",
-  "A": "с",
-  "B": "т",
-  "C": "у",
-  "E": "х",
-  "F": "ц",
-  "G": "ч",
-  "H": "ш",
-  "L": "ь",
-  "N": "ю",
-  "O": "я",
-  "Q": "ё"
-};
-
 const state = {
   startDate: null,
   endDate: null,
   accruals: null,
-  accrualsCharMap: null,
   orders: null,
   pvp: null,
   stencils: null,
@@ -208,255 +133,6 @@ function normalizeKey(value) {
   return String(value || "")
     .toLowerCase()
     .replace(/[^a-z0-9а-яё]/gi, "");
-}
-
-const CYRILLIC_RE = /[А-Яа-яЁё]/;
-const LEGACY_MARKER_RE = /[\u0010-\u001f!"#&'@:;<>?]/;
-const WEIRD_CHAR_RE = /[^\u0009\u000a\u000d\u0020-\u007e\u0400-\u04ff]/;
-let CP1251_DECODER = null;
-if (typeof TextDecoder !== "undefined") {
-  try {
-    CP1251_DECODER = new TextDecoder("windows-1251");
-  } catch (error) {
-    CP1251_DECODER = null;
-  }
-}
-
-function scoreCyrillic(text) {
-  const match = String(text || "").match(CYRILLIC_RE);
-  if (!match) return 0;
-  return (String(text || "").match(/[А-Яа-яЁё]/g) || []).length;
-}
-
-function decodeByBytes(text) {
-  if (!CP1251_DECODER) return String(text || "");
-  const str = String(text || "");
-  const lowBytes = new Uint8Array(str.length);
-  const highBytes = new Uint8Array(str.length);
-  for (let i = 0; i < str.length; i += 1) {
-    const code = str.charCodeAt(i);
-    lowBytes[i] = code & 0xff;
-    highBytes[i] = (code >> 8) & 0xff;
-  }
-  const lowDecoded = CP1251_DECODER.decode(lowBytes);
-  const highDecoded = CP1251_DECODER.decode(highBytes);
-  const lowScore = scoreCyrillic(lowDecoded);
-  const highScore = scoreCyrillic(highDecoded);
-  if (highScore > lowScore && highScore > 0) return highDecoded;
-  if (lowScore > 0) return lowDecoded;
-  return str;
-}
-
-function normalizeWeirdText(text) {
-  const raw = String(text || "");
-  if (!WEIRD_CHAR_RE.test(raw)) return raw;
-  const decoded = decodeByBytes(raw);
-  const rawCyr = scoreCyrillic(raw);
-  const decodedCyr = scoreCyrillic(decoded);
-  const rawWeird = (raw.match(WEIRD_CHAR_RE) || []).length;
-  const decodedWeird = (decoded.match(WEIRD_CHAR_RE) || []).length;
-  if (decodedCyr > rawCyr || decodedWeird < rawWeird) {
-    return decoded;
-  }
-  return raw;
-}
-
-function decodeLegacyString(
-  value,
-  { preserveDash = false, force = false, charMap = null } = {}
-) {
-  const text = normalizeWeirdText(String(value || "").trim());
-  if (!text || CYRILLIC_RE.test(text)) {
-    return text;
-  }
-  const map = charMap || LEGACY_CHAR_MAP;
-  if (!force && !LEGACY_MARKER_RE.test(text)) {
-    if (!charMap) {
-      return text;
-    }
-    let hasMapMatch = false;
-    for (const ch of text) {
-      if (ch in charMap) {
-        hasMapMatch = true;
-        break;
-      }
-    }
-    if (!hasMapMatch) {
-      return text;
-    }
-  }
-  let result = "";
-  for (const ch of text) {
-    if (preserveDash && ch === "-") {
-      result += "-";
-      continue;
-    }
-    result += map[ch] || LEGACY_CHAR_MAP[ch] || ch;
-  }
-  if (CYRILLIC_RE.test(result)) {
-    return result;
-  }
-  const byteDecoded = decodeByBytes(text);
-  if (CYRILLIC_RE.test(byteDecoded)) {
-    return byteDecoded;
-  }
-  return result;
-}
-
-function addCharMapFromPair(map, fromText, toText) {
-  const fromChars = Array.from(String(fromText || ""));
-  const toChars = Array.from(String(toText || ""));
-  if (fromChars.length === 0 || toChars.length === 0) return;
-  const lastIndex = Math.max(1, fromChars.length - 1);
-  const targetLast = Math.max(1, toChars.length - 1);
-  for (let i = 0; i < fromChars.length; i += 1) {
-    const src = fromChars[i];
-    const ratio = i / lastIndex;
-    const destIndex = Math.round(ratio * targetLast);
-    const dest = toChars[destIndex];
-    if (dest && !(src in map)) {
-      map[src] = dest;
-    }
-  }
-}
-
-function buildLegacyCharMapFromTypes(rows, knownTypes) {
-  if (!rows || rows.length === 0) return null;
-  const map = {};
-  let hits = 0;
-  for (const row of rows) {
-    const rawType = row && row["Тип начисления"];
-    if (typeof rawType !== "string") continue;
-    const rawTrimmed = rawType.trim();
-    if (!rawTrimmed) continue;
-    for (const known of knownTypes) {
-      const knownTrimmed = String(known || "").trim();
-      if (!knownTrimmed) continue;
-      if (Array.from(rawTrimmed).length === Array.from(knownTrimmed).length) {
-        addCharMapFromPair(map, rawTrimmed, knownTrimmed);
-        hits += 1;
-        break;
-      }
-    }
-  }
-  return hits > 0 ? map : null;
-}
-
-function buildLegacyCharMap(headerRow, positions) {
-  if (!headerRow || !positions) return null;
-  const map = {};
-  let hits = 0;
-  Object.entries(positions).forEach(([name, idx]) => {
-    const rawHeader = headerRow[idx];
-    if (typeof rawHeader !== "string") return;
-    const from = String(rawHeader).trim();
-    const to = String(name).trim();
-    if (!from) return;
-    const fromChars = Array.from(from);
-    const toChars = Array.from(to);
-    let sourceChars = fromChars;
-    let targetChars = toChars;
-    if (fromChars.length !== toChars.length) {
-      const filteredFrom = fromChars.filter((ch) => ch.trim() !== "");
-      const filteredTo = toChars.filter((ch) => ch.trim() !== "");
-      if (filteredFrom.length === filteredTo.length) {
-        sourceChars = filteredFrom;
-        targetChars = filteredTo;
-      }
-    }
-    if (sourceChars.length === targetChars.length) {
-      for (let i = 0; i < sourceChars.length; i += 1) {
-        const src = sourceChars[i];
-        const dest = targetChars[i];
-        if (!(src in map)) {
-          map[src] = dest;
-        }
-      }
-    } else if (sourceChars.length > 0 && targetChars.length > 0) {
-      const lastIndex = Math.max(1, sourceChars.length - 1);
-      const targetLast = Math.max(1, targetChars.length - 1);
-      for (let i = 0; i < sourceChars.length; i += 1) {
-        const src = sourceChars[i];
-        const ratio = i / lastIndex;
-        const destIndex = Math.round(ratio * targetLast);
-        const dest = targetChars[destIndex];
-        if (!(src in map) && dest) {
-          map[src] = dest;
-        }
-      }
-    }
-    hits += 1;
-  });
-  return Object.keys(map).length > 0 ? { map, hits } : null;
-}
-
-function findHeaderRowIndex(rows, maxIndex) {
-  let bestIndex = null;
-  let bestScore = -1;
-  const limit = Math.min(rows.length - 1, Math.max(0, maxIndex));
-  for (let i = 0; i <= limit; i += 1) {
-    const row = rows[i];
-    if (!row) continue;
-    let score = 0;
-    for (const cell of row) {
-      if (typeof cell !== "string") continue;
-      const text = cell.trim();
-      if (!text) continue;
-      if (!Number.isFinite(Number(text))) {
-        score += 1;
-      }
-    }
-    if (score > bestScore) {
-      bestScore = score;
-      bestIndex = i;
-    }
-  }
-  return bestIndex;
-}
-
-function buildLegacyCharMapFromWorkbook(
-  workbook,
-  fallback,
-  minStartRow,
-  headerIndexHint = null
-) {
-  if (!workbook || !fallback || !fallback.positions) return null;
-  let best = null;
-  workbook.SheetNames.forEach((sheetName) => {
-    const sheet = workbook.Sheets[sheetName];
-    const rows = XLSXLib.utils.sheet_to_json(sheet, {
-      header: 1,
-      defval: ""
-    });
-    const indicesToTry = new Set();
-    if (headerIndexHint !== null && headerIndexHint !== undefined) {
-      indicesToTry.add(headerIndexHint);
-    }
-    const maxIndex = Math.max(minStartRow || 0, fallback.startRow || 0) + 2;
-    const safeMax = Math.min(rows.length - 1, maxIndex);
-    for (let i = 0; i <= safeMax; i += 1) {
-      indicesToTry.add(i);
-    }
-    const autoIndex = findHeaderRowIndex(rows, safeMax);
-    if (autoIndex !== null && autoIndex !== undefined) {
-      indicesToTry.add(autoIndex);
-    }
-    indicesToTry.forEach((headerIndex) => {
-      if (headerIndex === null || headerIndex === undefined) return;
-      const candidate = buildLegacyCharMap(rows[headerIndex], fallback.positions);
-      if (!candidate) return;
-      if (!best || candidate.hits > best.hits) {
-        best = candidate;
-      } else if (
-        best &&
-        candidate.hits === best.hits &&
-        Object.keys(candidate.map).length > Object.keys(best.map).length
-      ) {
-        best = candidate;
-      }
-    });
-  });
-  return best ? best.map : null;
 }
 
 function setStatus(message, isError = false) {
@@ -580,9 +256,9 @@ function scoreHeaderRow(row, schema) {
   return { score: matched, matched, missing: requiredMissing };
 }
 
-function pickBestHeaderRow(rows, schema, startIndex = 0) {
+function pickBestHeaderRow(rows, schema) {
   let best = { idx: -1, score: 0, missing: Infinity };
-  for (let i = startIndex; i < rows.length; i += 1) {
+  for (let i = 0; i < rows.length; i += 1) {
     const { score, missing } = scoreHeaderRow(rows[i], schema);
     if (score > best.score || (score === best.score && missing < best.missing)) {
       best = { idx: i, score, missing };
@@ -591,12 +267,12 @@ function pickBestHeaderRow(rows, schema, startIndex = 0) {
   return best;
 }
 
-function extractRowsBySchemaFromSheet(sheet, schema, startIndex) {
+function extractRowsBySchemaFromSheet(sheet, schema) {
   const rows = XLSXLib.utils.sheet_to_json(sheet, {
     header: 1,
     defval: ""
   });
-  const best = pickBestHeaderRow(rows, schema, startIndex);
+  const best = pickBestHeaderRow(rows, schema);
   if (best.idx === -1 || best.missing > 0) {
     return { data: null, headerIndex: -1, score: best.score, missing: best.missing };
   }
@@ -624,12 +300,12 @@ function extractRowsBySchemaFromSheet(sheet, schema, startIndex) {
   return { data, headerIndex: best.idx, score: best.score, missing: 0 };
 }
 
-function extractRowsBySchema(workbook, schema, startIndex) {
+function extractRowsBySchema(workbook, schema) {
   let bestResult = null;
   let bestSheet = null;
   workbook.SheetNames.forEach((sheetName) => {
     const sheet = workbook.Sheets[sheetName];
-    const result = extractRowsBySchemaFromSheet(sheet, schema, startIndex);
+    const result = extractRowsBySchemaFromSheet(sheet, schema);
     if (result.data && (!bestResult || result.score > bestResult.score)) {
       bestResult = result;
       bestSheet = sheetName;
@@ -653,13 +329,12 @@ function normalizeSchema(schema) {
   }));
 }
 
-function extractRowsByPositionsFromSheet(sheet, schema, fallback, minStartRow) {
+function extractRowsByPositionsFromSheet(sheet, schema, fallback) {
   const rows = XLSXLib.utils.sheet_to_json(sheet, {
     header: 1,
     defval: ""
   });
-  const baseStart = fallback.startRow || 0;
-  let startRow = Math.max(minStartRow || 0, baseStart);
+  let startRow = fallback.startRow || 1;
   const headerScore = scoreHeaderRow(rows[startRow], schema);
   const requiredCount = schema.filter((item) => item.required).length;
   if (headerScore.matched >= requiredCount) {
@@ -678,9 +353,9 @@ function extractRowsByPositionsFromSheet(sheet, schema, fallback, minStartRow) {
   return data;
 }
 
-function extractRowsBySchemaOrPositions(workbook, schema, fallback, startIndex, minStartRow) {
+function extractRowsBySchemaOrPositions(workbook, schema, fallback) {
   try {
-    return extractRowsBySchema(workbook, schema, startIndex);
+    return extractRowsBySchema(workbook, schema);
   } catch (error) {
     if (!fallback) throw error;
   }
@@ -688,7 +363,7 @@ function extractRowsBySchemaOrPositions(workbook, schema, fallback, startIndex, 
   let bestSheet = null;
   workbook.SheetNames.forEach((sheetName) => {
     const sheet = workbook.Sheets[sheetName];
-    const data = extractRowsByPositionsFromSheet(sheet, schema, fallback, minStartRow);
+    const data = extractRowsByPositionsFromSheet(sheet, schema, fallback);
     if (data.length > 0 && (!bestData || data.length > bestData.length)) {
       bestData = data;
       bestSheet = sheetName;
@@ -723,39 +398,6 @@ function parseOptionalNumber(value) {
   const cleaned = text.replace(/\s/g, "").replace(",", ".");
   const parsed = Number(cleaned);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizeId(value) {
-  if (value === null || value === undefined) return "";
-  const text = String(value).trim();
-  return text;
-}
-
-const ACCRUALS_DASH_FIELDS = new Set([
-  "ID начисления",
-  "Артикул",
-  "SKU",
-  "Название товара",
-  "Номер заказа",
-  "Номер отправления"
-]);
-
-function decodeAccrualsRow(row, charMap) {
-  if (!row || !charMap) return row;
-  const decoded = {};
-  Object.entries(row).forEach(([key, value]) => {
-    if (typeof value === "string") {
-      const normalized = normalizeWeirdText(value);
-      decoded[key] = decodeLegacyString(normalized, {
-        preserveDash: ACCRUALS_DASH_FIELDS.has(key),
-        charMap,
-        force: true
-      });
-    } else {
-      decoded[key] = value;
-    }
-  });
-  return decoded;
 }
 
 function parseDateValue(value) {
@@ -1090,9 +732,9 @@ function createSebesRow(item, index) {
   const row = document.createElement("tr");
   const disabled = state.user ? "" : "disabled";
   row.innerHTML = `
-    <td><input type="text" data-field="article" data-index="${index}" value="${item.article || ""}" ${disabled}></td>
-    <td><input type="text" data-field="cost" data-index="${index}" value="${item.cost ?? ""}" ${disabled}></td>
-    <td><button type="button" class="ghost-button" data-remove="${index}" ${disabled}>Удалить</button></td>
+    <td><input type="text" data-field="article" value="${item.article || ""}" ${disabled}></td>
+    <td><input type="number" step="0.01" data-field="cost" value="${item.cost ?? ""}" ${disabled}></td>
+    <td><button type="button" data-remove="${index}" ${disabled}>Удалить</button></td>
   `;
   return row;
 }
@@ -1134,9 +776,7 @@ function getAccrualTypeOptions() {
   if (!state.accruals) return [];
   const types = new Set();
   for (const row of state.accruals) {
-    const type = decodeLegacyString(row["Тип начисления"], {
-      charMap: state.accrualsCharMap
-    });
+    const type = row["Тип начисления"];
     if (type) {
       types.add(String(type).trim());
     }
@@ -1289,7 +929,7 @@ function renderCashflowTable() {
   if (state.cashflow.periods.length === 0) {
     elements.cashflowBody.innerHTML = `
       <tr>
-        <td colspan="2" class="muted">Нет данных для отображения.</td>
+        <td colspan="2">Нет данных для отображения.</td>
       </tr>
     `;
     return;
@@ -1539,18 +1179,12 @@ function calculate() {
   const orderPromotionByShipmentArticle = new Map();
   const orderPromotionByOrderArticle = new Map();
   const ordersByArticle = new Map();
-  const skuToArticle = new Map();
 
   for (const row of state.orders) {
-    const orderNumber = normalizeId(row["Номер заказа"]);
-    const shipmentNumber = normalizeId(row["Номер отправления"]);
-    const article = normalizeId(row["Артикул"]);
-    const skuRaw = row["SKU"];
-    const sku =
-      skuRaw === "" || skuRaw === null || skuRaw === undefined
-        ? ""
-        : String(skuRaw).trim();
-    const status = normalizeId(row["Статус"]);
+    const orderNumber = row["Номер заказа"];
+    const shipmentNumber = row["Номер отправления"];
+    const article = row["Артикул"];
+    const status = row["Статус"];
     const deliveryDateValue = getRowValue(row, [
       "Delivery date",
       "Дата доставки"
@@ -1571,9 +1205,6 @@ function calculate() {
         (orderCountByOrderArticle.get(key) || 0) + 1
       );
     }
-    if (sku && article && !skuToArticle.has(sku)) {
-      skuToArticle.set(sku, article);
-    }
 
     if (String(status || "").toLowerCase() === "доставлен") {
       if (inRange(deliveryDate, state.startDate, state.endDate) && article) {
@@ -1583,9 +1214,9 @@ function calculate() {
   }
 
   for (const row of state.orders) {
-    const orderNumber = normalizeId(row["Номер заказа"]);
-    const shipmentNumber = normalizeId(row["Номер отправления"]);
-    const article = normalizeId(row["Артикул"]);
+    const orderNumber = row["Номер заказа"];
+    const shipmentNumber = row["Номер отправления"];
+    const article = row["Артикул"];
     if (!orderNumber || !article) continue;
     const key = `${orderNumber}__${article}`;
     const totalPromotion = pvpData.sumByKey.get(key) || 0;
@@ -1607,19 +1238,7 @@ function calculate() {
 
   const accrualCountByArticleDate = new Map();
   for (const row of state.accruals) {
-    const skuRaw = row["SKU"];
-    const sku =
-      skuRaw === "" || skuRaw === null || skuRaw === undefined
-        ? ""
-        : String(skuRaw).trim();
-    const articleRaw = row["Артикул"];
-    const decodedArticle = decodeLegacyString(articleRaw, {
-      preserveDash: true,
-      charMap: state.accrualsCharMap
-    });
-    const article =
-      decodedArticle ||
-      (sku && skuToArticle.has(sku) ? skuToArticle.get(sku) : "");
+    const article = row["Артикул"];
     if (!article) continue;
     const dateValue = parseDateValue(
       row["Дата принятия заказа в обработку или оказания услуги"]
@@ -1632,27 +1251,13 @@ function calculate() {
   }
 
   for (const row of state.accruals) {
-    const decodedOrderId = decodeLegacyString(row["ID начисления"], {
-      preserveDash: true,
-      charMap: state.accrualsCharMap
-    });
-    const orderOrShipmentId = normalizeId(decodedOrderId);
+    const orderOrShipmentId = row["ID начисления"];
     const articleRaw = row["Артикул"];
-    const skuRaw = row["SKU"];
-    const sku =
-      skuRaw === "" || skuRaw === null || skuRaw === undefined
-        ? ""
-        : String(skuRaw).trim();
-    const decodedArticle = decodeLegacyString(articleRaw, {
-      preserveDash: true,
-      charMap: state.accrualsCharMap
-    });
     const article =
-      decodedArticle ||
-      (sku && skuToArticle.has(sku) ? skuToArticle.get(sku) : "");
-    const type = decodeLegacyString(row["Тип начисления"], {
-      charMap: state.accrualsCharMap
-    });
+      articleRaw === "" || articleRaw === null || articleRaw === undefined
+        ? ""
+        : String(articleRaw).trim();
+    const type = row["Тип начисления"];
     const amount = parseNumber(row["Сумма итого, руб."]);
 
     const statusByOrder = String(orderStatusByOrder.get(orderOrShipmentId) || "");
@@ -1678,10 +1283,7 @@ function calculate() {
     const dateValue = parseDateValue(
       row["Дата принятия заказа в обработку или оказания услуги"]
     );
-    const name = decodeLegacyString(row["Название товара"], {
-      preserveDash: true,
-      charMap: state.accrualsCharMap
-    });
+    const name = row["Название товара"];
     const stencilKey = `${dateKey(dateValue)}__${String(name || "").trim()}`;
     const stencilSum = stencilData.sumByKey.get(stencilKey) || 0;
     const countKey = `${article}__${dateKey(dateValue)}`;
@@ -1853,39 +1455,14 @@ function onFileChange(type, schema, fallback) {
     if (!file) return;
     try {
       const workbook = await readWorkbook(file);
-      const headerStartIndex = 0;
-      const minStartRow = type === "accruals" ? 2 : 0;
-      if (type === "accruals") {
-        const headerIndexHint = Math.max(0, minStartRow - 1);
-        state.accrualsCharMap = buildLegacyCharMapFromWorkbook(
-          workbook,
-          fallback,
-          minStartRow,
-          headerIndexHint
-        );
-      }
       const data = extractRowsBySchemaOrPositions(
         workbook,
         normalizeSchema(schema),
-        fallback,
-        headerStartIndex,
-        minStartRow
+        fallback
       );
-      if (type === "accruals" && !state.accrualsCharMap) {
-        state.accrualsCharMap = buildLegacyCharMapFromTypes(
-          data,
-          ACCRUAL_TYPE_DICTIONARY
-        );
-      }
-      if (type === "accruals" && state.accrualsCharMap) {
-        state[type] = data.map((row) =>
-          decodeAccrualsRow(row, state.accrualsCharMap)
-        );
-      } else {
-        state[type] = data;
-      }
+      state[type] = data;
       if (type === "accruals") {
-        const dates = state[type]
+        const dates = data
           .map((row) =>
             parseDateValue(
               row["Дата принятия заказа в обработку или оказания услуги"]
