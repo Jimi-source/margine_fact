@@ -1456,8 +1456,8 @@ function onFileChange(type, schema, fallback) {
     if (!file) return;
     try {
       const workbook = await readWorkbook(file);
-      const headerStartIndex = type === "accruals" ? 1 : 0;
-      const minStartRow = type === "accruals" ? 1 : 0;
+      const headerStartIndex = 0;
+      const minStartRow = type === "accruals" ? 2 : 0;
       const data = extractRowsBySchemaOrPositions(
         workbook,
         normalizeSchema(schema),
