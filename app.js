@@ -212,6 +212,39 @@ function normalizeKey(value) {
 
 const CYRILLIC_RE = /[А-Яа-яЁё]/;
 const LEGACY_MARKER_RE = /[\u0010-\u001f!"#&'@:;<>?]/;
+let CP1251_DECODER = null;
+if (typeof TextDecoder !== "undefined") {
+  try {
+    CP1251_DECODER = new TextDecoder("windows-1251");
+  } catch (error) {
+    CP1251_DECODER = null;
+  }
+}
+
+function scoreCyrillic(text) {
+  const match = String(text || "").match(CYRILLIC_RE);
+  if (!match) return 0;
+  return (String(text || "").match(/[А-Яа-яЁё]/g) || []).length;
+}
+
+function decodeByBytes(text) {
+  if (!CP1251_DECODER) return String(text || "");
+  const str = String(text || "");
+  const lowBytes = new Uint8Array(str.length);
+  const highBytes = new Uint8Array(str.length);
+  for (let i = 0; i < str.length; i += 1) {
+    const code = str.charCodeAt(i);
+    lowBytes[i] = code & 0xff;
+    highBytes[i] = (code >> 8) & 0xff;
+  }
+  const lowDecoded = CP1251_DECODER.decode(lowBytes);
+  const highDecoded = CP1251_DECODER.decode(highBytes);
+  const lowScore = scoreCyrillic(lowDecoded);
+  const highScore = scoreCyrillic(highDecoded);
+  if (highScore > lowScore && highScore > 0) return highDecoded;
+  if (lowScore > 0) return lowDecoded;
+  return str;
+}
 
 function decodeLegacyString(
   value,
@@ -244,6 +277,13 @@ function decodeLegacyString(
       continue;
     }
     result += map[ch] || LEGACY_CHAR_MAP[ch] || ch;
+  }
+  if (CYRILLIC_RE.test(result)) {
+    return result;
+  }
+  const byteDecoded = decodeByBytes(text);
+  if (CYRILLIC_RE.test(byteDecoded)) {
+    return byteDecoded;
   }
   return result;
 }
