@@ -400,6 +400,14 @@ function parseOptionalNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseStatus(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") return value;
+  const cleaned = String(value).trim().replace(",", ".");
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function parseDateValue(value) {
   if (!value) return null;
   if (value instanceof Date && !Number.isNaN(value.valueOf())) {
@@ -497,6 +505,24 @@ function detectExpenseHeader(headers) {
     ) ||
     detectHeader(headers, (key) => key.includes("сумма") && !isSalesHeader(key))
   );
+}
+
+function detectPromotionHeader(headers) {
+  return (
+    detectHeader(headers, (key) => key.includes("продвижение")) ||
+    detectHeader(headers, (key) => key.includes("promotion")) ||
+    detectHeader(headers, (key) => key.includes("promo"))
+  );
+}
+
+function getAccrualStatus(row) {
+  if (!row) return null;
+  const status =
+    row["Статус"] ??
+    row["Статус начисления"] ??
+    row["Статус начисления, факт"] ??
+    row["Status"];
+  return parseStatus(status);
 }
 
 function dateKey(date) {
@@ -1181,19 +1207,20 @@ function calculate() {
   let otherServicesTotal = 0;
   let realizTotal = 0;
 
-  const pvpData = buildPvpSumByOrderArticle(state.pvp);
   const stencilData = buildStencilSumByDateName(state.stencils);
-  const warnings = [pvpData.warning, stencilData.warning].filter(Boolean);
+  const warnings = [stencilData.warning].filter(Boolean);
   if (warnings.length > 0) {
     setStatus(warnings.join(" "), true);
   }
 
   const orderStatusByOrder = new Map();
   const orderStatusByShipment = new Map();
-  const orderCountByOrderArticle = new Map();
   const orderPromotionByShipmentArticle = new Map();
   const orderPromotionByOrderArticle = new Map();
   const ordersByArticle = new Map();
+
+  const ordersHeaders = state.orders && state.orders[0] ? Object.keys(state.orders[0]) : [];
+  const promotionHeader = detectPromotionHeader(ordersHeaders) || "Продвижение";
 
   for (const row of state.orders) {
     const orderNumber = row["Номер заказа"];
@@ -1213,42 +1240,27 @@ function calculate() {
     if (shipmentNumber && !orderStatusByShipment.has(shipmentNumber)) {
       orderStatusByShipment.set(shipmentNumber, status);
     }
-    if (orderNumber && article) {
-      const key = `${orderNumber}__${article}`;
-      orderCountByOrderArticle.set(
-        key,
-        (orderCountByOrderArticle.get(key) || 0) + 1
-      );
-    }
-
     if (String(status || "").toLowerCase() === "доставлен") {
       if (inRange(deliveryDate, state.startDate, state.endDate) && article) {
         ordersByArticle.set(article, (ordersByArticle.get(article) || 0) + qty);
       }
     }
-  }
 
-  for (const row of state.orders) {
-    const orderNumber = row["Номер заказа"];
-    const shipmentNumber = row["Номер отправления"];
-    const article = row["Артикул"];
-    if (!orderNumber || !article) continue;
-    const key = `${orderNumber}__${article}`;
-    const totalPromotion = pvpData.sumByKey.get(key) || 0;
-    const count = orderCountByOrderArticle.get(key) || 0;
-    const promotionPerRow = count > 0 ? totalPromotion / count : 0;
-    if (shipmentNumber) {
+    const promotionValue = parseNumber(row[promotionHeader]);
+    if (shipmentNumber && article && promotionValue) {
       const shipKey = `${shipmentNumber}__${article}`;
       orderPromotionByShipmentArticle.set(
         shipKey,
-        (orderPromotionByShipmentArticle.get(shipKey) || 0) + promotionPerRow
+        (orderPromotionByShipmentArticle.get(shipKey) || 0) + promotionValue
       );
     }
-    const orderKey = `${orderNumber}__${article}`;
-    orderPromotionByOrderArticle.set(
-      orderKey,
-      (orderPromotionByOrderArticle.get(orderKey) || 0) + promotionPerRow
-    );
+    if (orderNumber && article && promotionValue) {
+      const orderKey = `${orderNumber}__${article}`;
+      orderPromotionByOrderArticle.set(
+        orderKey,
+        (orderPromotionByOrderArticle.get(orderKey) || 0) + promotionValue
+      );
+    }
   }
 
   const accrualCountByArticleDate = new Map();
@@ -1311,6 +1323,14 @@ function calculate() {
         article,
         (accrualsByArticle.get(article) || 0) + amount
       );
+    }
+
+    const accrualStatus = getAccrualStatus(row);
+    const statusFlag =
+      Number.isFinite(accrualStatus) && accrualStatus !== null
+        ? accrualStatus
+        : statusScore;
+    if (statusFlag === 1 && article) {
       adsByArticle.set(article, (adsByArticle.get(article) || 0) + ads);
     }
 
@@ -1678,7 +1698,8 @@ async function init() {
       "Вознаграждение Ozon, %": 12,
       "Индекс локализации, %": 13,
       "Среднее время доставки, часы": 14,
-      "Сумма итого, руб.": 15
+      "Сумма итого, руб.": 15,
+      "Статус": 18
     }
   };
   const ordersFallback = {
@@ -1689,7 +1710,8 @@ async function init() {
       "Статус": 4,
       "Дата доставки": 5,
       "Артикул": 11,
-      "Количество": 16
+      "Количество": 16,
+      "Продвижение": 38
     }
   };
   const pvpFallback = {
@@ -1727,7 +1749,8 @@ async function init() {
       { name: "Артикул", keys: ["артикул"], required: true },
       { name: "Тип начисления", keys: ["типначисления"], required: true },
       { name: "Название товара", keys: ["названиетовара", "наименованиетовара"], required: false },
-      { name: "Сумма итого, руб.", keys: ["суммаитого", "суммаитогоруб"], required: true }
+      { name: "Сумма итого, руб.", keys: ["суммаитого", "суммаитогоруб"], required: true },
+      { name: "Статус", keys: ["статус"], required: false }
     ], accrualsFallback)
   );
   attachFileHandler(
@@ -1739,7 +1762,8 @@ async function init() {
       { name: "Дата доставки", keys: ["датадоставки"], required: false },
       { name: "Delivery date", keys: ["deliverydate"], required: false },
       { name: "Артикул", keys: ["артикул"], required: true },
-      { name: "Количество", keys: ["количество"], required: true }
+      { name: "Количество", keys: ["количество"], required: true },
+      { name: "Продвижение", keys: ["продвижение", "promotion"], required: false }
     ], ordersFallback)
   );
   attachFileHandler(
