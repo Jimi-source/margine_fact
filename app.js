@@ -212,6 +212,7 @@ function normalizeKey(value) {
 
 const CYRILLIC_RE = /[А-Яа-яЁё]/;
 const LEGACY_MARKER_RE = /[\u0010-\u001f!"#&'@:;<>?]/;
+const WEIRD_CHAR_RE = /[^\u0009\u000a\u000d\u0020-\u007e\u0400-\u04ff]/;
 let CP1251_DECODER = null;
 if (typeof TextDecoder !== "undefined") {
   try {
@@ -246,11 +247,25 @@ function decodeByBytes(text) {
   return str;
 }
 
+function normalizeWeirdText(text) {
+  const raw = String(text || "");
+  if (!WEIRD_CHAR_RE.test(raw)) return raw;
+  const decoded = decodeByBytes(raw);
+  const rawCyr = scoreCyrillic(raw);
+  const decodedCyr = scoreCyrillic(decoded);
+  const rawWeird = (raw.match(WEIRD_CHAR_RE) || []).length;
+  const decodedWeird = (decoded.match(WEIRD_CHAR_RE) || []).length;
+  if (decodedCyr > rawCyr || decodedWeird < rawWeird) {
+    return decoded;
+  }
+  return raw;
+}
+
 function decodeLegacyString(
   value,
   { preserveDash = false, force = false, charMap = null } = {}
 ) {
-  const text = String(value || "").trim();
+  const text = normalizeWeirdText(String(value || "").trim());
   if (!text || CYRILLIC_RE.test(text)) {
     return text;
   }
@@ -730,9 +745,11 @@ function decodeAccrualsRow(row, charMap) {
   const decoded = {};
   Object.entries(row).forEach(([key, value]) => {
     if (typeof value === "string") {
-      decoded[key] = decodeLegacyString(value, {
+      const normalized = normalizeWeirdText(value);
+      decoded[key] = decodeLegacyString(normalized, {
         preserveDash: ACCRUALS_DASH_FIELDS.has(key),
-        charMap
+        charMap,
+        force: true
       });
     } else {
       decoded[key] = value;
