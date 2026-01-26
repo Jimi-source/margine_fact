@@ -1308,7 +1308,13 @@ function calculate() {
     }
   }
 
-  const articles = Array.from(ordersByArticle.keys()).sort();
+  const articles = Array.from(
+    new Set([
+      ...ordersByArticle.keys(),
+      ...accrualsByArticle.keys(),
+      ...sebesMap.keys()
+    ])
+  ).sort();
   const articleCount = articles.length || 1;
   const otherPerArticle = otherServicesTotal / articleCount;
 
