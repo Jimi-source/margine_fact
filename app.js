@@ -48,6 +48,31 @@ const OTHER_SERVICES_EXCLUDED = new Set([
   "Продвижение с оплатой за заказ"
 ]);
 
+const ACCRUAL_TYPE_DICTIONARY = [
+  "Баллы за скидки",
+  "Бонусы продавца",
+  "Бронирование места и персонала для поставки с неполным составом в составе грузоместа",
+  "Возврат вознаграждения",
+  "Возврат выручки",
+  "Вознаграждение за продажу",
+  "Выручка",
+  "Доставка до места выдачи",
+  "Звёздные товары",
+  "Кросс-докинг",
+  "Логистика",
+  "Обработка возвратов Ozon",
+  "Обработка возвратов, отмен и невыкупов партнёрами",
+  "Обработка отменённых и невостребованных товаров",
+  "Обратная логистика",
+  "Программы партнёров",
+  "Эквайринг",
+  "Продвижение в поиске",
+  "Трафареты",
+  "Продвижение с оплатой за заказ",
+  "Реклама в сети Интернет на Сайте",
+  "Реклама в сети интернет на Сайте"
+];
+
 const LEGACY_CHAR_MAP = {
   "\u0010": "А",
   "\u0011": "Б",
@@ -223,6 +248,45 @@ function decodeLegacyString(
   return result;
 }
 
+function addCharMapFromPair(map, fromText, toText) {
+  const fromChars = Array.from(String(fromText || ""));
+  const toChars = Array.from(String(toText || ""));
+  if (fromChars.length === 0 || toChars.length === 0) return;
+  const lastIndex = Math.max(1, fromChars.length - 1);
+  const targetLast = Math.max(1, toChars.length - 1);
+  for (let i = 0; i < fromChars.length; i += 1) {
+    const src = fromChars[i];
+    const ratio = i / lastIndex;
+    const destIndex = Math.round(ratio * targetLast);
+    const dest = toChars[destIndex];
+    if (dest && !(src in map)) {
+      map[src] = dest;
+    }
+  }
+}
+
+function buildLegacyCharMapFromTypes(rows, knownTypes) {
+  if (!rows || rows.length === 0) return null;
+  const map = {};
+  let hits = 0;
+  for (const row of rows) {
+    const rawType = row && row["Тип начисления"];
+    if (typeof rawType !== "string") continue;
+    const rawTrimmed = rawType.trim();
+    if (!rawTrimmed) continue;
+    for (const known of knownTypes) {
+      const knownTrimmed = String(known || "").trim();
+      if (!knownTrimmed) continue;
+      if (Array.from(rawTrimmed).length === Array.from(knownTrimmed).length) {
+        addCharMapFromPair(map, rawTrimmed, knownTrimmed);
+        hits += 1;
+        break;
+      }
+    }
+  }
+  return hits > 0 ? map : null;
+}
+
 function buildLegacyCharMap(headerRow, positions) {
   if (!headerRow || !positions) return null;
   const map = {};
@@ -240,15 +304,30 @@ function buildLegacyCharMap(headerRow, positions) {
     if (fromChars.length !== toChars.length) {
       const filteredFrom = fromChars.filter((ch) => ch.trim() !== "");
       const filteredTo = toChars.filter((ch) => ch.trim() !== "");
-      if (filteredFrom.length !== filteredTo.length) return;
-      sourceChars = filteredFrom;
-      targetChars = filteredTo;
+      if (filteredFrom.length === filteredTo.length) {
+        sourceChars = filteredFrom;
+        targetChars = filteredTo;
+      }
     }
-    for (let i = 0; i < sourceChars.length; i += 1) {
-      const src = sourceChars[i];
-      const dest = targetChars[i];
-      if (!(src in map)) {
-        map[src] = dest;
+    if (sourceChars.length === targetChars.length) {
+      for (let i = 0; i < sourceChars.length; i += 1) {
+        const src = sourceChars[i];
+        const dest = targetChars[i];
+        if (!(src in map)) {
+          map[src] = dest;
+        }
+      }
+    } else if (sourceChars.length > 0 && targetChars.length > 0) {
+      const lastIndex = Math.max(1, sourceChars.length - 1);
+      const targetLast = Math.max(1, targetChars.length - 1);
+      for (let i = 0; i < sourceChars.length; i += 1) {
+        const src = sourceChars[i];
+        const ratio = i / lastIndex;
+        const destIndex = Math.round(ratio * targetLast);
+        const dest = targetChars[destIndex];
+        if (!(src in map) && dest) {
+          map[src] = dest;
+        }
       }
     }
     hits += 1;
@@ -595,6 +674,31 @@ function normalizeId(value) {
   if (value === null || value === undefined) return "";
   const text = String(value).trim();
   return text;
+}
+
+const ACCRUALS_DASH_FIELDS = new Set([
+  "ID начисления",
+  "Артикул",
+  "SKU",
+  "Название товара",
+  "Номер заказа",
+  "Номер отправления"
+]);
+
+function decodeAccrualsRow(row, charMap) {
+  if (!row || !charMap) return row;
+  const decoded = {};
+  Object.entries(row).forEach(([key, value]) => {
+    if (typeof value === "string") {
+      decoded[key] = decodeLegacyString(value, {
+        preserveDash: ACCRUALS_DASH_FIELDS.has(key),
+        charMap
+      });
+    } else {
+      decoded[key] = value;
+    }
+  });
+  return decoded;
 }
 
 function parseDateValue(value) {
@@ -1471,7 +1575,11 @@ function calculate() {
   }
 
   for (const row of state.accruals) {
-    const orderOrShipmentId = normalizeId(row["ID начисления"]);
+    const decodedOrderId = decodeLegacyString(row["ID начисления"], {
+      preserveDash: true,
+      charMap: state.accrualsCharMap
+    });
+    const orderOrShipmentId = normalizeId(decodedOrderId);
     const articleRaw = row["Артикул"];
     const skuRaw = row["SKU"];
     const sku =
@@ -1706,9 +1814,21 @@ function onFileChange(type, schema, fallback) {
         headerStartIndex,
         minStartRow
       );
-      state[type] = data;
+      if (type === "accruals" && !state.accrualsCharMap) {
+        state.accrualsCharMap = buildLegacyCharMapFromTypes(
+          data,
+          ACCRUAL_TYPE_DICTIONARY
+        );
+      }
+      if (type === "accruals" && state.accrualsCharMap) {
+        state[type] = data.map((row) =>
+          decodeAccrualsRow(row, state.accrualsCharMap)
+        );
+      } else {
+        state[type] = data;
+      }
       if (type === "accruals") {
-        const dates = data
+        const dates = state[type]
           .map((row) =>
             parseDateValue(
               row["Дата принятия заказа в обработку или оказания услуги"]
