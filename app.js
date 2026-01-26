@@ -269,7 +269,12 @@ function findHeaderRowIndex(rows, maxIndex) {
   return bestIndex;
 }
 
-function buildLegacyCharMapFromWorkbook(workbook, fallback, minStartRow) {
+function buildLegacyCharMapFromWorkbook(
+  workbook,
+  fallback,
+  minStartRow,
+  headerIndexHint = null
+) {
   if (!workbook || !fallback || !fallback.positions) return null;
   let best = null;
   workbook.SheetNames.forEach((sheetName) => {
@@ -278,11 +283,14 @@ function buildLegacyCharMapFromWorkbook(workbook, fallback, minStartRow) {
       header: 1,
       defval: ""
     });
-    const maxIndex = Math.max(
-      minStartRow || 0,
-      fallback.startRow || 0
-    );
-    const headerIndex = findHeaderRowIndex(rows, maxIndex);
+    let headerIndex = headerIndexHint;
+    if (headerIndex === null || headerIndex === undefined) {
+      const maxIndex = Math.max(
+        minStartRow || 0,
+        fallback.startRow || 0
+      );
+      headerIndex = findHeaderRowIndex(rows, maxIndex);
+    }
     if (headerIndex === null) return;
     const candidate = buildLegacyCharMap(rows[headerIndex], fallback.positions);
     if (!candidate) return;
@@ -1653,10 +1661,12 @@ function onFileChange(type, schema, fallback) {
       const headerStartIndex = 0;
       const minStartRow = type === "accruals" ? 2 : 0;
       if (type === "accruals") {
+        const headerIndexHint = Math.max(0, minStartRow - 1);
         state.accrualsCharMap = buildLegacyCharMapFromWorkbook(
           workbook,
           fallback,
-          minStartRow
+          minStartRow,
+          headerIndexHint
         );
       }
       const data = extractRowsBySchemaOrPositions(
