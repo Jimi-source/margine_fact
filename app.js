@@ -460,6 +460,19 @@ function inRange(date, start, end) {
 }
 
 async function readWorkbook(file) {
+  const name = String(file && file.name ? file.name : "").toLowerCase();
+  if (name.endsWith(".csv")) {
+    const text = await file.text();
+    const commaCount = (text.match(/,/g) || []).length;
+    const semicolonCount = (text.match(/;/g) || []).length;
+    const delimiter = semicolonCount > commaCount ? ";" : ",";
+    return XLSXLib.read(text, {
+      type: "string",
+      FS: delimiter,
+      raw: true,
+      cellDates: true
+    });
+  }
   const buffer = await file.arrayBuffer();
   return XLSXLib.read(buffer, { type: "array", cellDates: true });
 }
