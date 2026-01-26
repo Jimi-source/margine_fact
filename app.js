@@ -101,6 +101,7 @@ const state = {
   startDate: null,
   endDate: null,
   accruals: null,
+  accrualsCharMap: null,
   orders: null,
   pvp: null,
   stencils: null,
@@ -187,13 +188,29 @@ function normalizeKey(value) {
 const CYRILLIC_RE = /[А-Яа-яЁё]/;
 const LEGACY_MARKER_RE = /[\u0010-\u001f!"#&'@:;<>?]/;
 
-function decodeLegacyString(value, { preserveDash = false, force = false } = {}) {
+function decodeLegacyString(
+  value,
+  { preserveDash = false, force = false, charMap = null } = {}
+) {
   const text = String(value || "").trim();
   if (!text || CYRILLIC_RE.test(text)) {
     return text;
   }
+  const map = charMap || LEGACY_CHAR_MAP;
   if (!force && !LEGACY_MARKER_RE.test(text)) {
-    return text;
+    if (!charMap) {
+      return text;
+    }
+    let hasMapMatch = false;
+    for (const ch of text) {
+      if (ch in charMap) {
+        hasMapMatch = true;
+        break;
+      }
+    }
+    if (!hasMapMatch) {
+      return text;
+    }
   }
   let result = "";
   for (const ch of text) {
@@ -201,9 +218,79 @@ function decodeLegacyString(value, { preserveDash = false, force = false } = {})
       result += "-";
       continue;
     }
-    result += LEGACY_CHAR_MAP[ch] || ch;
+    result += map[ch] || LEGACY_CHAR_MAP[ch] || ch;
   }
   return result;
+}
+
+function buildLegacyCharMap(headerRow, positions) {
+  if (!headerRow || !positions) return null;
+  const map = {};
+  let hits = 0;
+  Object.entries(positions).forEach(([name, idx]) => {
+    const rawHeader = headerRow[idx];
+    if (typeof rawHeader !== "string") return;
+    const from = String(rawHeader).trim();
+    const to = String(name).trim();
+    if (!from || from.length !== to.length) return;
+    for (let i = 0; i < from.length; i += 1) {
+      const src = from[i];
+      const dest = to[i];
+      if (!(src in map)) {
+        map[src] = dest;
+      }
+    }
+    hits += 1;
+  });
+  return Object.keys(map).length > 0 ? { map, hits } : null;
+}
+
+function findHeaderRowIndex(rows, maxIndex) {
+  let bestIndex = null;
+  let bestScore = -1;
+  const limit = Math.min(rows.length - 1, Math.max(0, maxIndex));
+  for (let i = 0; i <= limit; i += 1) {
+    const row = rows[i];
+    if (!row) continue;
+    let score = 0;
+    for (const cell of row) {
+      if (typeof cell !== "string") continue;
+      const text = cell.trim();
+      if (!text) continue;
+      if (!Number.isFinite(Number(text))) {
+        score += 1;
+      }
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = i;
+    }
+  }
+  return bestIndex;
+}
+
+function buildLegacyCharMapFromWorkbook(workbook, fallback, minStartRow) {
+  if (!workbook || !fallback || !fallback.positions) return null;
+  let best = null;
+  workbook.SheetNames.forEach((sheetName) => {
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSXLib.utils.sheet_to_json(sheet, {
+      header: 1,
+      defval: ""
+    });
+    const maxIndex = Math.max(
+      minStartRow || 0,
+      fallback.startRow || 0
+    );
+    const headerIndex = findHeaderRowIndex(rows, maxIndex);
+    if (headerIndex === null) return;
+    const candidate = buildLegacyCharMap(rows[headerIndex], fallback.positions);
+    if (!candidate) return;
+    if (!best || candidate.hits > best.hits) {
+      best = candidate;
+    }
+  });
+  return best ? best.map : null;
 }
 
 function setStatus(message, isError = false) {
@@ -848,7 +935,9 @@ function getAccrualTypeOptions() {
   if (!state.accruals) return [];
   const types = new Set();
   for (const row of state.accruals) {
-    const type = decodeLegacyString(row["Тип начисления"]);
+    const type = decodeLegacyString(row["Тип начисления"], {
+      charMap: state.accrualsCharMap
+    });
     if (type) {
       types.add(String(type).trim());
     }
@@ -1325,7 +1414,10 @@ function calculate() {
         ? ""
         : String(skuRaw).trim();
     const articleRaw = row["Артикул"];
-    const decodedArticle = decodeLegacyString(articleRaw, { preserveDash: true });
+    const decodedArticle = decodeLegacyString(articleRaw, {
+      preserveDash: true,
+      charMap: state.accrualsCharMap
+    });
     const article =
       decodedArticle ||
       (sku && skuToArticle.has(sku) ? skuToArticle.get(sku) : "");
@@ -1348,11 +1440,16 @@ function calculate() {
       skuRaw === "" || skuRaw === null || skuRaw === undefined
         ? ""
         : String(skuRaw).trim();
-    const decodedArticle = decodeLegacyString(articleRaw, { preserveDash: true });
+    const decodedArticle = decodeLegacyString(articleRaw, {
+      preserveDash: true,
+      charMap: state.accrualsCharMap
+    });
     const article =
       decodedArticle ||
       (sku && skuToArticle.has(sku) ? skuToArticle.get(sku) : "");
-    const type = decodeLegacyString(row["Тип начисления"]);
+    const type = decodeLegacyString(row["Тип начисления"], {
+      charMap: state.accrualsCharMap
+    });
     const amount = parseNumber(row["Сумма итого, руб."]);
 
     const statusByOrder = String(orderStatusByOrder.get(orderOrShipmentId) || "");
@@ -1378,7 +1475,10 @@ function calculate() {
     const dateValue = parseDateValue(
       row["Дата принятия заказа в обработку или оказания услуги"]
     );
-    const name = decodeLegacyString(row["Название товара"], { preserveDash: true });
+    const name = decodeLegacyString(row["Название товара"], {
+      preserveDash: true,
+      charMap: state.accrualsCharMap
+    });
     const stencilKey = `${dateKey(dateValue)}__${String(name || "").trim()}`;
     const stencilSum = stencilData.sumByKey.get(stencilKey) || 0;
     const countKey = `${article}__${dateKey(dateValue)}`;
@@ -1552,6 +1652,13 @@ function onFileChange(type, schema, fallback) {
       const workbook = await readWorkbook(file);
       const headerStartIndex = 0;
       const minStartRow = type === "accruals" ? 2 : 0;
+      if (type === "accruals") {
+        state.accrualsCharMap = buildLegacyCharMapFromWorkbook(
+          workbook,
+          fallback,
+          minStartRow
+        );
+      }
       const data = extractRowsBySchemaOrPositions(
         workbook,
         normalizeSchema(schema),
