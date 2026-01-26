@@ -48,6 +48,55 @@ const OTHER_SERVICES_EXCLUDED = new Set([
   "Продвижение с оплатой за заказ"
 ]);
 
+const LEGACY_CHAR_MAP = {
+  "\u0010": "А",
+  "\u0011": "Б",
+  "\u0012": "В",
+  "\u0013": "Г",
+  "\u0014": "Д",
+  "\u0017": "З",
+  "\u0018": "И",
+  "\u001a": "К",
+  "\u001b": "Л",
+  "\u001d": "Н",
+  "\u001e": "О",
+  "\u001f": "П",
+  "!": "С",
+  "\"": "Т",
+  "#": "У",
+  "&": "Ц",
+  "'": "Ч",
+  "-": "Э",
+  "0": "а",
+  "1": "б",
+  "2": "в",
+  "3": "г",
+  "4": "д",
+  "5": "е",
+  "6": "ж",
+  "7": "з",
+  "8": "и",
+  "9": "й",
+  ":": "к",
+  ";": "л",
+  "<": "м",
+  "=": "н",
+  ">": "о",
+  "?": "п",
+  "@": "р",
+  "A": "с",
+  "B": "т",
+  "C": "у",
+  "E": "х",
+  "F": "ц",
+  "G": "ч",
+  "H": "ш",
+  "L": "ь",
+  "N": "ю",
+  "O": "я",
+  "Q": "ё"
+};
+
 const state = {
   startDate: null,
   endDate: null,
@@ -133,6 +182,28 @@ function normalizeKey(value) {
   return String(value || "")
     .toLowerCase()
     .replace(/[^a-z0-9а-яё]/gi, "");
+}
+
+const CYRILLIC_RE = /[А-Яа-яЁё]/;
+const LEGACY_MARKER_RE = /[\u0010-\u001f!"#&'@:;<>?]/;
+
+function decodeLegacyString(value, { preserveDash = false, force = false } = {}) {
+  const text = String(value || "").trim();
+  if (!text || CYRILLIC_RE.test(text)) {
+    return text;
+  }
+  if (!force && !LEGACY_MARKER_RE.test(text)) {
+    return text;
+  }
+  let result = "";
+  for (const ch of text) {
+    if (preserveDash && ch === "-") {
+      result += "-";
+      continue;
+    }
+    result += LEGACY_CHAR_MAP[ch] || ch;
+  }
+  return result;
 }
 
 function setStatus(message, isError = false) {
@@ -777,7 +848,7 @@ function getAccrualTypeOptions() {
   if (!state.accruals) return [];
   const types = new Set();
   for (const row of state.accruals) {
-    const type = row["Тип начисления"];
+    const type = decodeLegacyString(row["Тип начисления"]);
     if (type) {
       types.add(String(type).trim());
     }
@@ -1180,11 +1251,17 @@ function calculate() {
   const orderPromotionByShipmentArticle = new Map();
   const orderPromotionByOrderArticle = new Map();
   const ordersByArticle = new Map();
+  const skuToArticle = new Map();
 
   for (const row of state.orders) {
     const orderNumber = row["Номер заказа"];
     const shipmentNumber = row["Номер отправления"];
     const article = row["Артикул"];
+    const skuRaw = row["SKU"];
+    const sku =
+      skuRaw === "" || skuRaw === null || skuRaw === undefined
+        ? ""
+        : String(skuRaw).trim();
     const status = row["Статус"];
     const deliveryDateValue = getRowValue(row, [
       "Delivery date",
@@ -1205,6 +1282,9 @@ function calculate() {
         key,
         (orderCountByOrderArticle.get(key) || 0) + 1
       );
+    }
+    if (sku && article && !skuToArticle.has(sku)) {
+      skuToArticle.set(sku, article);
     }
 
     if (String(status || "").toLowerCase() === "доставлен") {
@@ -1239,7 +1319,16 @@ function calculate() {
 
   const accrualCountByArticleDate = new Map();
   for (const row of state.accruals) {
-    const article = row["Артикул"];
+    const skuRaw = row["SKU"];
+    const sku =
+      skuRaw === "" || skuRaw === null || skuRaw === undefined
+        ? ""
+        : String(skuRaw).trim();
+    const articleRaw = row["Артикул"];
+    const decodedArticle = decodeLegacyString(articleRaw, { preserveDash: true });
+    const article =
+      decodedArticle ||
+      (sku && skuToArticle.has(sku) ? skuToArticle.get(sku) : "");
     if (!article) continue;
     const dateValue = parseDateValue(
       row["Дата принятия заказа в обработку или оказания услуги"]
@@ -1254,11 +1343,16 @@ function calculate() {
   for (const row of state.accruals) {
     const orderOrShipmentId = row["ID начисления"];
     const articleRaw = row["Артикул"];
-    const article =
-      articleRaw === "" || articleRaw === null || articleRaw === undefined
+    const skuRaw = row["SKU"];
+    const sku =
+      skuRaw === "" || skuRaw === null || skuRaw === undefined
         ? ""
-        : String(articleRaw).trim();
-    const type = row["Тип начисления"];
+        : String(skuRaw).trim();
+    const decodedArticle = decodeLegacyString(articleRaw, { preserveDash: true });
+    const article =
+      decodedArticle ||
+      (sku && skuToArticle.has(sku) ? skuToArticle.get(sku) : "");
+    const type = decodeLegacyString(row["Тип начисления"]);
     const amount = parseNumber(row["Сумма итого, руб."]);
 
     const statusByOrder = String(orderStatusByOrder.get(orderOrShipmentId) || "");
@@ -1284,7 +1378,7 @@ function calculate() {
     const dateValue = parseDateValue(
       row["Дата принятия заказа в обработку или оказания услуги"]
     );
-    const name = row["Название товара"];
+    const name = decodeLegacyString(row["Название товара"], { preserveDash: true });
     const stencilKey = `${dateKey(dateValue)}__${String(name || "").trim()}`;
     const stencilSum = stencilData.sumByKey.get(stencilKey) || 0;
     const countKey = `${article}__${dateKey(dateValue)}`;
