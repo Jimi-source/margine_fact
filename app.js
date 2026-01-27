@@ -237,8 +237,18 @@ function updateCashflowActions() {
     state.cashflow.selectedKey.includes(
       `${toISODate(state.lastCalcRange.start)}|${toISODate(state.lastCalcRange.end)}`
     );
+  let hasChanges = false;
+  if (sameRange && state.lastSummary) {
+    const entry = getCashflowEntry(state.cashflow.selectedKey);
+    const existingMargin = Number.isFinite(entry.marginBeforeTax)
+      ? entry.marginBeforeTax
+      : null;
+    hasChanges =
+      existingMargin === null ||
+      Math.abs(existingMargin - state.lastSummary.marginBeforeTax) > 0.0000001;
+  }
   elements.cashflowSavePeriod.disabled =
-    !state.user || !hasSelection || !hasSummary || !sameRange;
+    !state.user || !hasSelection || !hasSummary || !sameRange || !hasChanges;
 }
 
 function findHeaderRow(rows, requiredHeaders) {
@@ -1015,7 +1025,7 @@ function formatOptionalNumber(value) {
 }
 
 function formatInputValue(value) {
-  return Number.isFinite(value) ? String(value) : "";
+  return Number.isFinite(value) ? formatNumber(value) : "";
 }
 
 async function persistCashflowEntries() {
@@ -1050,6 +1060,39 @@ function onCashflowEntryChange(event) {
   setCashflowEntry(key, { [field]: value });
   renderCashflowTable();
   scheduleCashflowSave("Кэшфлоу сохранен.");
+}
+
+function onCashflowInputFocus(event) {
+  const target = event.target;
+  if (!target || !target.dataset.cashflowField) return;
+  const key = target.dataset.cashflowKey;
+  const field = target.dataset.cashflowField;
+  const entry = getCashflowEntry(key);
+  const rawValue = entry[field];
+  if (Number.isFinite(rawValue)) {
+    target.value = String(rawValue);
+  } else {
+    target.value = "";
+  }
+}
+
+function onCashflowInputBlur(event) {
+  const target = event.target;
+  if (!target || !target.dataset.cashflowField) return;
+  const value = parseOptionalNumber(target.value);
+  target.value = formatInputValue(value);
+}
+
+function onCashflowPeriodClick(event) {
+  const target = event.target;
+  const key = target && target.dataset ? target.dataset.cashflowOpen : "";
+  if (!key) return;
+  state.cashflow.selectedKey = key;
+  if (elements.cashflowPeriod) {
+    elements.cashflowPeriod.value = key;
+  }
+  updateCashflowActions();
+  openCashflowPeriod();
 }
 
 function renderCashflowTable() {
@@ -1109,14 +1152,22 @@ function renderCashflowTable() {
       }
       return `
         <tr class="${isPayoutWeek ? "cashflow-current" : ""}">
-          <td>${period.label}</td>
+          <td>
+            <button
+              type="button"
+              class="cashflow-period-link"
+              data-cashflow-open="${period.key}"
+            >
+              ${period.label}
+            </button>
+          </td>
           <td>${formatDate(payoutDate)}</td>
           <td>${margin}</td>
           <td>
             <input
               class="cashflow-input"
-              type="number"
-              step="0.01"
+              type="text"
+              inputmode="decimal"
               data-cashflow-key="${period.key}"
               data-cashflow-field="accrualsManual"
               value="${formatInputValue(entry.accrualsManual)}"
@@ -1128,8 +1179,8 @@ function renderCashflowTable() {
           <td>
             <input
               class="cashflow-input"
-              type="number"
-              step="0.01"
+              type="text"
+              inputmode="decimal"
               data-cashflow-key="${period.key}"
               data-cashflow-field="procurementActual"
               value="${formatInputValue(entry.procurementActual)}"
@@ -1139,8 +1190,8 @@ function renderCashflowTable() {
           <td>
             <input
               class="cashflow-input"
-              type="number"
-              step="0.01"
+              type="text"
+              inputmode="decimal"
               data-cashflow-key="${period.key}"
               data-cashflow-field="taxesActual"
               value="${formatInputValue(entry.taxesActual)}"
@@ -1853,6 +1904,9 @@ async function init() {
   }
   if (elements.cashflowBody) {
     elements.cashflowBody.addEventListener("change", onCashflowEntryChange);
+    elements.cashflowBody.addEventListener("focusin", onCashflowInputFocus);
+    elements.cashflowBody.addEventListener("focusout", onCashflowInputBlur);
+    elements.cashflowBody.addEventListener("click", onCashflowPeriodClick);
   }
 
   renderSebesTable(state.sebes);

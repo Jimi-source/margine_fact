@@ -433,6 +433,22 @@ tbody tr.cashflow-current {
   font-weight: 500;
 }
 
+#cashflowTable .cashflow-period-link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(76, 111, 255, 0.5);
+}
+
+#cashflowTable .cashflow-period-link:hover {
+  color: var(--primary);
+}
+
 .sebes-actions {
   margin-top: 16px;
   display: flex;
