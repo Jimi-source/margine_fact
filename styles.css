@@ -390,6 +390,9 @@ tbody tr.cashflow-current {
 #cashflowTable th:first-child,
 #cashflowTable td:first-child {
   text-align: left;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 #cashflowTable th {
