@@ -46,6 +46,8 @@ const db = getFirestore(firebaseApp);
 
 const XLSXLib = window.XLSX;
 
+const FUNCTIONS_BASE_URL = "https://us-central1-marginefact.cloudfunctions.net";
+
 const SEBES = [];
 
 const REALIZ_TYPES = [
@@ -1204,6 +1206,61 @@ function renderCashflowTable() {
     .join("");
 }
 
+async function calculateRemote() {
+  const token = await state.user.getIdToken();
+  const payload = {
+    startDate: toISODate(state.startDate),
+    endDate: toISODate(state.endDate),
+    accruals: state.accruals,
+    orders: state.orders,
+    pvp: state.pvp || [],
+    stencils: state.stencils || [],
+    sebes: state.sebes || [],
+    otherServicesTypesSelected: Array.from(state.otherServicesTypesSelected)
+  };
+  const response = await fetch(`${FUNCTIONS_BASE_URL}/generateReport`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+  if (!response.ok || !data || !data.ok) {
+    const errorMessage = data && data.error ? data.error : "Ошибка сервера.";
+    setStatus(errorMessage, true);
+    return;
+  }
+  const summary = data.summary;
+  const rows = data.rows || [];
+  const missingCosts = data.missingCosts || [];
+  state.lastSummary = summary;
+  state.lastCalcRange = { start: state.startDate, end: state.endDate };
+  renderSummary(summary);
+  renderTable(rows);
+  setMissingCostBlock(missingCosts);
+  setStatus("Расчет выполнен.");
+  updateCashflowActions();
+  const matchedPeriod = state.cashflow.periods.find(
+    (period) =>
+      toISODate(period.start) === toISODate(state.lastCalcRange.start) &&
+      toISODate(period.end) === toISODate(state.lastCalcRange.end)
+  );
+  if (matchedPeriod) {
+    state.cashflow.selectedKey = matchedPeriod.key;
+    setCashflowEntry(matchedPeriod.key, {
+      marginBeforeTax: summary.marginBeforeTax,
+      summary
+    });
+    renderCashflowTable();
+    updateCashflowActions();
+    if (state.user) {
+      scheduleCashflowSave();
+    }
+  }
+}
+
 function refreshCashflowView() {
   state.cashflow.periods = buildCashflowPeriods(
     state.cashflow.year,
@@ -1779,13 +1836,15 @@ function onCalculateClick() {
     setAuthStatus("Ошибка: библиотека XLSX не загрузилась.", true);
     return;
   }
-  setStatus("Запускаю расчет…");
-  try {
-    calculate();
-  } catch (error) {
+  if (!state.user) {
+    setStatus("Нужно войти в аккаунт.", true);
+    return;
+  }
+  setStatus("Отправляю расчет…");
+  calculateRemote().catch((error) => {
     const message = error && error.message ? error.message : "Неизвестная ошибка";
     setStatus(`Ошибка расчета: ${message}`, true);
-  }
+  });
 }
 
 function updateAuthUI(user) {
