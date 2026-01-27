@@ -578,12 +578,6 @@ function toISODate(date) {
   return `${year}-${month}-${day}`;
 }
 
-function addDays(date, days) {
-  const next = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
 function startOfMonth(year, monthIndex) {
   return new Date(year, monthIndex, 1);
 }
