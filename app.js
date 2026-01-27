@@ -119,8 +119,6 @@ const elements = {
   otherServicesFilter: document.getElementById("otherServicesFilter"),
   cashflowYear: document.getElementById("cashflowYear"),
   cashflowGranularity: document.getElementById("cashflowGranularity"),
-  cashflowPeriod: document.getElementById("cashflowPeriod"),
-  cashflowOpenPeriod: document.getElementById("cashflowOpenPeriod"),
   cashflowSavePeriod: document.getElementById("cashflowSavePeriod"),
   cashflowStatus: document.getElementById("cashflowStatus"),
   cashflowBody: document.getElementById("cashflowBody")
@@ -785,8 +783,6 @@ function validateElements() {
   if (!elements.otherServicesFilter) missing.push("otherServicesFilter");
   if (!elements.cashflowYear) missing.push("cashflowYear");
   if (!elements.cashflowGranularity) missing.push("cashflowGranularity");
-  if (!elements.cashflowPeriod) missing.push("cashflowPeriod");
-  if (!elements.cashflowOpenPeriod) missing.push("cashflowOpenPeriod");
   if (!elements.cashflowSavePeriod) missing.push("cashflowSavePeriod");
   if (!elements.cashflowStatus) missing.push("cashflowStatus");
   if (!elements.cashflowBody) missing.push("cashflowBody");
@@ -1242,7 +1238,15 @@ function openCashflowPeriod() {
   elements.endDate.value = toISODate(period.end);
   onDateChange();
   setActiveTab("calc");
-  setCashflowStatus(`Открыт период: ${period.label}.`);
+  const entry = getCashflowEntry(period.key);
+  if (entry && entry.summary) {
+    state.lastSummary = entry.summary;
+    state.lastCalcRange = { start: period.start, end: period.end };
+    renderSummary(entry.summary);
+    setCashflowStatus(`Открыт период: ${period.label}. Показан последний расчет.`);
+  } else {
+    setCashflowStatus(`Открыт период: ${period.label}.`);
+  }
 }
 
 async function loadCashflow(year) {
@@ -1645,6 +1649,23 @@ function calculate() {
   renderSummary(summary);
 
   renderTable(rows);
+  const matchedPeriod = state.cashflow.periods.find(
+    (period) =>
+      toISODate(period.start) === toISODate(state.lastCalcRange.start) &&
+      toISODate(period.end) === toISODate(state.lastCalcRange.end)
+  );
+  if (matchedPeriod) {
+    state.cashflow.selectedKey = matchedPeriod.key;
+    setCashflowEntry(matchedPeriod.key, {
+      marginBeforeTax: summary.marginBeforeTax,
+      summary
+    });
+    renderCashflowTable();
+    updateCashflowActions();
+    if (state.user) {
+      scheduleCashflowSave();
+    }
+  }
   updateCashflowActions();
   if (missingCosts.size > 0) {
     setMissingCostBlock(Array.from(missingCosts));
@@ -1892,12 +1913,6 @@ async function init() {
       state.cashflow.granularity = elements.cashflowGranularity.value;
       refreshCashflowView();
     });
-  }
-  if (elements.cashflowPeriod) {
-    elements.cashflowPeriod.addEventListener("change", updateCashflowSelection);
-  }
-  if (elements.cashflowOpenPeriod) {
-    elements.cashflowOpenPeriod.addEventListener("click", openCashflowPeriod);
   }
   if (elements.cashflowSavePeriod) {
     elements.cashflowSavePeriod.addEventListener("click", saveCashflowPeriod);
