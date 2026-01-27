@@ -111,6 +111,8 @@ const elements = {
   sebesFile: document.getElementById("sebesFile"),
   downloadSebesTemplate: document.getElementById("downloadSebesTemplate"),
   otherServicesFilter: document.getElementById("otherServicesFilter"),
+  buyCreditsStatus: document.getElementById("buyCreditsStatus"),
+  buyCreditsButtons: Array.from(document.querySelectorAll(".buy-credits-button")),
   cashflowYear: document.getElementById("cashflowYear"),
   cashflowGranularity: document.getElementById("cashflowGranularity"),
   cashflowSavePeriod: document.getElementById("cashflowSavePeriod"),
@@ -148,6 +150,12 @@ function setStatus(message, isError = false) {
   if (!elements.uploadStatus) return;
   elements.uploadStatus.textContent = message;
   elements.uploadStatus.classList.toggle("error", isError);
+}
+
+function setBuyCreditsStatus(message, isError = false) {
+  if (!elements.buyCreditsStatus) return;
+  elements.buyCreditsStatus.textContent = message;
+  elements.buyCreditsStatus.classList.toggle("error", isError);
 }
 
 function setSebesStatus(message, isError = false) {
@@ -651,6 +659,7 @@ function validateElements() {
   if (!elements.sebesFile) missing.push("sebesFile");
   if (!elements.downloadSebesTemplate) missing.push("downloadSebesTemplate");
   if (!elements.otherServicesFilter) missing.push("otherServicesFilter");
+  if (!elements.buyCreditsStatus) missing.push("buyCreditsStatus");
   if (!elements.cashflowYear) missing.push("cashflowYear");
   if (!elements.cashflowGranularity) missing.push("cashflowGranularity");
   if (!elements.cashflowSavePeriod) missing.push("cashflowSavePeriod");
@@ -1133,6 +1142,35 @@ async function calculateRemote() {
   }
 }
 
+async function createPaymentRemote(packId) {
+  if (!state.user) {
+    setBuyCreditsStatus("Нужно войти в аккаунт.", true);
+    return;
+  }
+  setBuyCreditsStatus("Перенаправляю на оплату…");
+  const token = await state.user.getIdToken();
+  const response = await fetch(`${FUNCTIONS_BASE_URL}/createPayment`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ packId })
+  });
+  const data = await response.json();
+  if (!response.ok || !data || !data.ok) {
+    const errorMessage = data && data.error ? data.error : "Ошибка оплаты.";
+    setBuyCreditsStatus(errorMessage, true);
+    return;
+  }
+  const url = data.confirmationUrl;
+  if (url) {
+    window.location.href = url;
+  } else {
+    setBuyCreditsStatus("Не удалось получить ссылку оплаты.", true);
+  }
+}
+
 function refreshCashflowView() {
   state.cashflow.periods = buildCashflowPeriods(
     state.cashflow.year,
@@ -1553,6 +1591,22 @@ async function init() {
   elements.startDate.addEventListener("change", onDateChange);
   elements.endDate.addEventListener("change", onDateChange);
   elements.calcButton.addEventListener("click", onCalculateClick);
+  if (elements.buyCreditsButtons.length > 0) {
+    elements.buyCreditsButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const packId = Number(button.dataset.pack || 0);
+        if (!packId) {
+          setBuyCreditsStatus("Некорректный пакет.", true);
+          return;
+        }
+        createPaymentRemote(packId).catch((error) => {
+          const message =
+            error && error.message ? error.message : "Ошибка оплаты.";
+          setBuyCreditsStatus(message, true);
+        });
+      });
+    });
+  }
   if (elements.addSebesRow) {
     elements.addSebesRow.addEventListener("click", addSebesRow);
   }

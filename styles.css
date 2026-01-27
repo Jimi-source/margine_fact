@@ -276,6 +276,34 @@ select:focus {
   margin-top: 0;
 }
 
+.buy-credits-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  margin-top: 12px;
+}
+
+.buy-credits-button {
+  margin-top: 0;
+  text-align: center;
+}
+
+.info-links {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.info-links a {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.info-links a:hover {
+  text-decoration: underline;
+}
+
 .summary .row {
   display: grid;
   gap: 8px;
