@@ -14,15 +14,21 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 window.__APP_READY = false;
+function reportInitError(message) {
+  const el = document.getElementById("authStatus");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.add("error");
+}
 window.addEventListener("error", (event) => {
-  const message = event && event.message ? event.message : "Ошибка скрипта.";
-  setAuthStatus(message, true);
   window.__APP_READY = true;
+  const message = event && event.message ? event.message : "Ошибка скрипта.";
+  reportInitError(message);
 });
 window.addEventListener("unhandledrejection", (event) => {
-  const reason = event && event.reason ? String(event.reason) : "Ошибка промиса.";
-  setAuthStatus(reason, true);
   window.__APP_READY = true;
+  const reason = event && event.reason ? String(event.reason) : "Ошибка промиса.";
+  reportInitError(reason);
 });
 
 const firebaseConfig = {
