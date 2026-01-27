@@ -14,6 +14,16 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 window.__APP_READY = false;
+window.addEventListener("error", (event) => {
+  const message = event && event.message ? event.message : "Ошибка скрипта.";
+  setAuthStatus(message, true);
+  window.__APP_READY = true;
+});
+window.addEventListener("unhandledrejection", (event) => {
+  const reason = event && event.reason ? String(event.reason) : "Ошибка промиса.";
+  setAuthStatus(reason, true);
+  window.__APP_READY = true;
+});
 
 const firebaseConfig = {
   apiKey: "AIzaSyCAlv2Wqzyy89Hp5sOYUBpuTNieqMIjF74",
@@ -1781,6 +1791,7 @@ async function init() {
 
   if (!XLSXLib) {
     setStatus("Ошибка: библиотека XLSX не загрузилась.", true);
+    window.__APP_READY = true;
     return;
   }
 
@@ -2015,4 +2026,5 @@ try {
   init();
 } catch (error) {
   setAuthStatus("Ошибка инициализации приложения.", true);
+  window.__APP_READY = true;
 }
