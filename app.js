@@ -454,6 +454,20 @@ function formatDate(value) {
   return value.toLocaleDateString("ru-RU");
 }
 
+function addDays(date, days) {
+  const next = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function getWeekBounds(date) {
+  const day = date.getDay();
+  const diffToMonday = (day + 6) % 7;
+  const start = addDays(date, -diffToMonday);
+  const end = addDays(start, 6);
+  return { start, end };
+}
+
 function inRange(date, start, end) {
   if (!date || !start || !end) return false;
   const time = new Date(
@@ -1033,16 +1047,21 @@ function renderCashflowTable() {
   if (state.cashflow.periods.length === 0) {
     elements.cashflowBody.innerHTML = `
       <tr>
-        <td colspan="9">Нет данных для отображения.</td>
+        <td colspan="12">Нет данных для отображения.</td>
       </tr>
     `;
     return;
   }
+  const today = new Date();
+  const currentWeek = getWeekBounds(today);
   let cumulativeProcurement = 0;
   let cumulativeTaxes = 0;
+  let cumulativeMargin = 0;
   elements.cashflowBody.innerHTML = state.cashflow.periods
     .map((period) => {
       const entry = getCashflowEntry(period.key);
+      const payoutDate = addDays(period.end, 24);
+      const isPayoutWeek = inRange(payoutDate, currentWeek.start, currentWeek.end);
       const margin = Number.isFinite(entry.marginBeforeTax)
         ? formatPercent(entry.marginBeforeTax)
         : "—";
@@ -1059,6 +1078,10 @@ function renderCashflowTable() {
         ? entry.procurementActual
         : null;
       const taxesActual = Number.isFinite(entry.taxesActual) ? entry.taxesActual : null;
+      const marginTotal =
+        accruals !== null && procurementCalc !== null && taxesCalc !== null
+          ? accruals - procurementCalc - taxesCalc
+          : null;
       if (Number.isFinite(procurementCalc)) {
         cumulativeProcurement += procurementCalc;
       }
@@ -1071,9 +1094,13 @@ function renderCashflowTable() {
       if (Number.isFinite(taxesActual)) {
         cumulativeTaxes -= taxesActual;
       }
+      if (Number.isFinite(marginTotal)) {
+        cumulativeMargin += marginTotal;
+      }
       return `
-        <tr>
+        <tr class="${isPayoutWeek ? "cashflow-current" : ""}">
           <td>${period.label}</td>
+          <td>${formatDate(payoutDate)}</td>
           <td>${margin}</td>
           <td>
             <input
@@ -1112,6 +1139,8 @@ function renderCashflowTable() {
           </td>
           <td>${formatOptionalNumber(cumulativeProcurement)}</td>
           <td>${formatOptionalNumber(cumulativeTaxes)}</td>
+          <td>${formatOptionalNumber(marginTotal)}</td>
+          <td>${formatOptionalNumber(cumulativeMargin)}</td>
         </tr>
       `;
     })

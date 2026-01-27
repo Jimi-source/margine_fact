@@ -325,6 +325,10 @@ tbody tr:hover {
   background: rgba(76, 111, 255, 0.08);
 }
 
+tbody tr.cashflow-current {
+  background: rgba(34, 197, 94, 0.12);
+}
+
 .missing-cost {
   margin-top: 16px;
   padding: 12px 14px;
