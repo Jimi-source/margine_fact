@@ -76,6 +76,7 @@ const state = {
   sebes: [],
   earliestAccrualDate: null,
   user: null,
+  userCredits: null,
   sebesDirty: false,
   otherServicesTypes: [],
   otherServicesTypesSelected: new Set(),
@@ -107,6 +108,7 @@ const elements = {
   appContent: document.getElementById("appContent"),
   authGate: document.getElementById("authGate"),
   authState: document.getElementById("authState"),
+  creditsState: document.getElementById("creditsState"),
   authStatus: document.getElementById("authStatus"),
   signInButton: document.getElementById("signInButton"),
   signOutButton: document.getElementById("signOutButton"),
@@ -773,6 +775,7 @@ function validateElements() {
   if (!elements.appContent) missing.push("appContent");
   if (!elements.authGate) missing.push("authGate");
   if (!elements.authState) missing.push("authState");
+  if (!elements.creditsState) missing.push("creditsState");
   if (!elements.authStatus) missing.push("authStatus");
   if (!elements.signInButton) missing.push("signInButton");
   if (!elements.signOutButton) missing.push("signOutButton");
@@ -1231,6 +1234,10 @@ async function calculateRemote() {
     const errorMessage = data && data.error ? data.error : "Ошибка сервера.";
     setStatus(errorMessage, true);
     return;
+  }
+  if (data.creditsLeft !== undefined) {
+    state.userCredits = Number(data.creditsLeft);
+    updateAuthUI(state.user);
   }
   const summary = data.summary;
   const rows = data.rows || [];
@@ -1862,6 +1869,11 @@ function updateAuthUI(user) {
   if (elements.authState) {
     elements.authState.textContent = user ? user.email || "Вход выполнен" : "Гость";
   }
+  if (elements.creditsState) {
+    const value =
+      user && Number.isFinite(state.userCredits) ? formatInteger(state.userCredits) : "—";
+    elements.creditsState.textContent = `Кредиты: ${value}`;
+  }
   if (elements.signInButton) {
     elements.signInButton.disabled = Boolean(user);
   }
@@ -1870,6 +1882,20 @@ function updateAuthUI(user) {
   }
   updateSebesActions();
   updateCashflowActions();
+}
+
+async function loadUserCredits(user) {
+  if (!user) {
+    state.userCredits = null;
+    updateAuthUI(null);
+    return;
+  }
+  const ref = doc(db, "users", user.uid);
+  const snapshot = await getDoc(ref);
+  const data = snapshot.exists() ? snapshot.data() || {} : {};
+  const credits = Number(data.credits || 0);
+  state.userCredits = Number.isFinite(credits) ? credits : 0;
+  updateAuthUI(user);
 }
 
 async function loadUserSebes(user) {
@@ -2101,6 +2127,7 @@ async function init() {
         state.user = result.user || null;
         updateAuthUI(state.user);
         await loadUserSebes(state.user);
+        await loadUserCredits(state.user);
         renderSebesTable(state.sebes);
         updateSebesActions();
         await loadCashflow(state.cashflow.year);
@@ -2138,6 +2165,7 @@ async function init() {
       setAuthStatus("");
     }
     await loadUserSebes(state.user);
+    await loadUserCredits(state.user);
     renderSebesTable(state.sebes);
     updateSebesActions();
     await loadCashflow(state.cashflow.year);
