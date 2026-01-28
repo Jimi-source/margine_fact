@@ -71,6 +71,7 @@ const state = {
   user: null,
   userCredits: null,
   userRole: null,
+  showOtherServices: false,
   sebesDirty: false,
   otherServicesTypes: [],
   otherServicesTypesSelected: new Set(),
@@ -772,6 +773,13 @@ function getAccrualTypeOptions() {
 
 function renderOtherServicesFilter() {
   if (!elements.otherServicesFilter) return;
+  const wrapper = elements.otherServicesFilter.closest(".other-services-filter");
+  if (wrapper) {
+    wrapper.classList.toggle("hidden", !state.showOtherServices);
+  }
+  if (!state.showOtherServices) {
+    return;
+  }
   if (!state.accruals) {
     elements.otherServicesFilter.textContent =
       'Загрузите отчет "Начисления", чтобы увидеть список типов.';
@@ -1141,6 +1149,8 @@ async function calculateRemote() {
     setStatus(errorMessage, true);
     return;
   }
+  state.showOtherServices = true;
+  renderOtherServicesFilter();
   if (data.creditsLeft !== undefined) {
     state.userCredits = Number(data.creditsLeft);
     updateAuthUI(state.user);
@@ -1448,8 +1458,8 @@ function renderTable(rows) {
         <td>${formatInteger(row.qty)}</td>
         <td>${formatNumber(row.costSum)}</td>
         <td>${formatNumber(row.otherPerArticle)}</td>
-        <td>${formatNumber(row.accrual)}</td>
         <td>${formatNumber(row.ads)}</td>
+        <td>${formatNumber(row.accrual)}</td>
         <td>${formatNumber(row.revenue)}</td>
         <td>${formatPercent(row.margin)}</td>
       </tr>
@@ -1492,6 +1502,10 @@ function onFileChange(type, schema, fallback) {
         state.earliestAccrualDate = dates.length > 0 ? dates[0] : null;
         updateDateHint();
         updateOtherServicesTypes();
+      }
+      if (type === "accruals") {
+        state.showOtherServices = false;
+        renderOtherServicesFilter();
       }
       updateStatus();
     } catch (error) {
