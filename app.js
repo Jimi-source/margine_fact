@@ -70,6 +70,7 @@ const state = {
   earliestAccrualDate: null,
   user: null,
   userCredits: null,
+  userRole: null,
   sebesDirty: false,
   otherServicesTypes: [],
   otherServicesTypesSelected: new Set(),
@@ -804,7 +805,9 @@ function renderOtherServicesFilter() {
 }
 
 function updateOtherServicesTypes() {
-  const availableTypes = getAccrualTypeOptions();
+  const availableTypes = getAccrualTypeOptions().filter(
+    (type) => !OTHER_SERVICES_EXCLUDED.has(type)
+  );
   const nextSelected = new Set();
   availableTypes.forEach((type) => {
     if (state.otherServicesTypesSelected.has(type)) {
@@ -1187,7 +1190,7 @@ async function initUserRemote() {
     const errorMessage = data && data.error ? data.error : "Ошибка сервера.";
     throw new Error(errorMessage);
   }
-  return data.credits;
+  return { credits: data.credits, role: data.role };
 }
 
 async function createPaymentRemote(packId) {
@@ -1432,20 +1435,6 @@ function renderSummary(values) {
       <div>Прочие: ${formatNumber(values.otherServicesTotal)}</div>
       <div>Маржа: ${formatPercent(values.marginBeforeTax)}</div>
     </div>
-    <div class="row">
-      <strong>Сумма реализации с баллами (9%)</strong>
-      <div>Реализация: ${formatNumber(values.realizTotal)}</div>
-      <div>Налог 9%: ${formatNumber(values.tax9)}</div>
-      <div>Чистая: ${formatNumber(values.netWithTax9)}</div>
-      <div>Маржа: ${formatPercent(values.marginAfterTax9)}</div>
-    </div>
-    <div class="row">
-      <strong>УСН15 (5%)</strong>
-      <div>Реализация: ${formatNumber(values.realizTotal)}</div>
-      <div>Налог 5%: ${formatNumber(values.tax5)}</div>
-      <div>Чистая: ${formatNumber(values.netWithTax5)}</div>
-      <div>Маржа: ${formatPercent(values.marginAfterTax5)}</div>
-    </div>
   `;
 }
 
@@ -1567,6 +1556,26 @@ function updateAuthUI(user) {
   updateCashflowActions();
 }
 
+function updateOwnerUI() {
+  const isOwner = state.userRole === "owner";
+  elements.tabButtons.forEach((button) => {
+    if (button.dataset.tab === "cashflow") {
+      button.classList.toggle("hidden", !isOwner);
+    }
+  });
+  elements.tabPanels.forEach((panel) => {
+    if (panel.dataset.panel === "cashflow") {
+      panel.classList.toggle("hidden", !isOwner);
+    }
+  });
+  if (elements.cashflowSavePeriod) {
+    elements.cashflowSavePeriod.classList.toggle("hidden", !isOwner);
+  }
+  if (!isOwner) {
+    setActiveTab("calc");
+  }
+}
+
 function openSignUpModal() {
   if (!elements.signUpModal) return;
   elements.signUpModal.classList.remove("hidden");
@@ -1585,19 +1594,24 @@ function closeSignUpModal() {
 async function loadUserCredits(user) {
   if (!user) {
     state.userCredits = null;
+    state.userRole = null;
     updateAuthUI(null);
     return;
   }
   try {
-    const credits = await initUserRemote();
+    const result = await initUserRemote();
+    const credits = result ? Number(result.credits || 0) : 0;
     state.userCredits = Number.isFinite(credits) ? credits : 0;
+    state.userRole = result && result.role ? String(result.role) : null;
   } catch (error) {
     const ref = doc(db, "users", user.uid);
     const snapshot = await getDoc(ref);
     const data = snapshot.exists() ? snapshot.data() || {} : {};
     const credits = Number(data.credits || 0);
     state.userCredits = Number.isFinite(credits) ? credits : 0;
+    state.userRole = data.role ? String(data.role) : null;
   }
+  updateOwnerUI();
   updateAuthUI(user);
 }
 
