@@ -75,6 +75,54 @@ body {
   justify-content: center;
 }
 
+.modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 8, 16, 0.7);
+}
+
+.modal-card {
+  position: relative;
+  z-index: 1;
+  width: min(420px, 92vw);
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 24px 26px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.modal-body {
+  display: grid;
+  gap: 12px;
+}
+
 .auth-card h1 {
   margin-top: 0;
 }

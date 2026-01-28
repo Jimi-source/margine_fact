@@ -345,5 +345,33 @@
         }
       }, 1500);
     </script>
+    <div id="signUpModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-overlay" data-modal-close="true"></div>
+      <div class="modal-card" role="dialog" aria-modal="true">
+        <div class="modal-header">
+          <h2>Регистрация</h2>
+          <button type="button" id="signUpClose" class="ghost-button">Закрыть</button>
+        </div>
+        <div class="modal-body">
+          <label class="auth-field">
+            Email
+            <input type="email" id="signUpEmail" placeholder="you@example.com" />
+          </label>
+          <label class="auth-field">
+            Пароль
+            <input type="password" id="signUpPassword" placeholder="Минимум 6 символов" />
+          </label>
+          <label class="auth-field">
+            Повтор пароля
+            <input type="password" id="signUpPasswordRepeat" placeholder="Повторите пароль" />
+          </label>
+          <div class="auth-actions">
+            <button type="button" id="signUpSubmit" class="primary-button">
+              Создать аккаунт
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

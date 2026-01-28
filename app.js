@@ -109,6 +109,12 @@ const elements = {
   emailSignIn: document.getElementById("emailSignIn"),
   emailSignUp: document.getElementById("emailSignUp"),
   emailReset: document.getElementById("emailReset"),
+  signUpModal: document.getElementById("signUpModal"),
+  signUpClose: document.getElementById("signUpClose"),
+  signUpEmail: document.getElementById("signUpEmail"),
+  signUpPassword: document.getElementById("signUpPassword"),
+  signUpPasswordRepeat: document.getElementById("signUpPasswordRepeat"),
+  signUpSubmit: document.getElementById("signUpSubmit"),
   signOutButton: document.getElementById("signOutButton"),
   tabButtons: Array.from(document.querySelectorAll(".tab-button")),
   tabPanels: Array.from(document.querySelectorAll(".tab-panel")),
@@ -664,6 +670,12 @@ function validateElements() {
   if (!elements.emailSignIn) missing.push("emailSignIn");
   if (!elements.emailSignUp) missing.push("emailSignUp");
   if (!elements.emailReset) missing.push("emailReset");
+  if (!elements.signUpModal) missing.push("signUpModal");
+  if (!elements.signUpClose) missing.push("signUpClose");
+  if (!elements.signUpEmail) missing.push("signUpEmail");
+  if (!elements.signUpPassword) missing.push("signUpPassword");
+  if (!elements.signUpPasswordRepeat) missing.push("signUpPasswordRepeat");
+  if (!elements.signUpSubmit) missing.push("signUpSubmit");
   if (!elements.signOutButton) missing.push("signOutButton");
   if (!elements.sebesBody) missing.push("sebesBody");
   if (!elements.sebesStatus) missing.push("sebesStatus");
@@ -1532,6 +1544,21 @@ function updateAuthUI(user) {
   updateCashflowActions();
 }
 
+function openSignUpModal() {
+  if (!elements.signUpModal) return;
+  elements.signUpModal.classList.remove("hidden");
+  elements.signUpModal.setAttribute("aria-hidden", "false");
+}
+
+function closeSignUpModal() {
+  if (!elements.signUpModal) return;
+  elements.signUpModal.classList.add("hidden");
+  elements.signUpModal.setAttribute("aria-hidden", "true");
+  if (elements.signUpEmail) elements.signUpEmail.value = "";
+  if (elements.signUpPassword) elements.signUpPassword.value = "";
+  if (elements.signUpPasswordRepeat) elements.signUpPasswordRepeat.value = "";
+}
+
 async function loadUserCredits(user) {
   if (!user) {
     state.userCredits = null;
@@ -1831,20 +1858,44 @@ async function init() {
   }
   if (elements.emailSignUp) {
     elements.emailSignUp.addEventListener("click", async () => {
-      const email = elements.emailAuth ? elements.emailAuth.value.trim() : "";
-      const password = elements.passwordAuth ? elements.passwordAuth.value : "";
-      if (!email || !password) {
-        setAuthStatus("Введите email и пароль.", true);
+      openSignUpModal();
+    });
+  }
+  if (elements.signUpClose) {
+    elements.signUpClose.addEventListener("click", closeSignUpModal);
+  }
+  if (elements.signUpModal) {
+    elements.signUpModal.addEventListener("click", (event) => {
+      const target = event.target;
+      if (target && target.dataset && target.dataset.modalClose) {
+        closeSignUpModal();
+      }
+    });
+  }
+  if (elements.signUpSubmit) {
+    elements.signUpSubmit.addEventListener("click", async () => {
+      const email = elements.signUpEmail ? elements.signUpEmail.value.trim() : "";
+      const password = elements.signUpPassword ? elements.signUpPassword.value : "";
+      const repeat = elements.signUpPasswordRepeat
+        ? elements.signUpPasswordRepeat.value
+        : "";
+      if (!email || !password || !repeat) {
+        setAuthStatus("Введите email и дважды пароль.", true);
         return;
       }
       if (password.length < 6) {
         setAuthStatus("Пароль должен быть не короче 6 символов.", true);
         return;
       }
+      if (password !== repeat) {
+        setAuthStatus("Пароли не совпадают.", true);
+        return;
+      }
       try {
         setAuthStatus("Создаю аккаунт…");
         await createUserWithEmailAndPassword(auth, email, password);
         setAuthStatus("");
+        closeSignUpModal();
       } catch (error) {
         setAuthStatus(mapAuthError(error), true);
       }
