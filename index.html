@@ -103,11 +103,11 @@
         <div class="grid">
           <label>
             Начало периода
-            <input type="date" id="startDate" />
+            <input type="date" id="startDate" class="date-input" />
           </label>
           <label>
             Конец периода
-            <input type="date" id="endDate" />
+            <input type="date" id="endDate" class="date-input" />
           </label>
         </div>
         <div id="dateHint" class="hint"></div>
@@ -116,21 +116,25 @@
       <section class="card tab-panel" data-panel="calc">
         <h2>2. Загрузка отчетов</h2>
         <div class="grid">
-          <label>
+          <label class="upload-dropzone">
             Начисления (обязательный)
             <input type="file" id="accrualsFile" accept=".xlsx,.xls" />
+            <span class="upload-hint muted">Перетащите файл сюда или нажмите для выбора</span>
           </label>
-          <label>
+          <label class="upload-dropzone">
             Заказы (обязательный)
             <input type="file" id="ordersFile" accept=".xlsx,.xls,.csv" />
+            <span class="upload-hint muted">Перетащите файл сюда или нажмите для выбора</span>
           </label>
-          <label>
+          <label class="upload-dropzone">
             ПВП (необязательный)
             <input type="file" id="pvpFile" accept=".xlsx,.xls" />
+            <span class="upload-hint muted">Перетащите файл сюда или нажмите для выбора</span>
           </label>
-          <label>
+          <label class="upload-dropzone">
             Трафареты (необязательный)
             <input type="file" id="stencilsFile" accept=".xlsx,.xls" />
+            <span class="upload-hint muted">Перетащите файл сюда или нажмите для выбора</span>
           </label>
         </div>
         <button type="button" id="calcButton" class="primary-button" disabled>

@@ -1822,6 +1822,47 @@ async function init() {
     }
   };
 
+  const setupDatePicker = (input) => {
+    if (!input) return;
+    const showPicker = () => {
+      if (typeof input.showPicker === "function") {
+        input.showPicker();
+      }
+    };
+    input.addEventListener("click", showPicker);
+    input.addEventListener("pointerdown", showPicker);
+  };
+
+  const setupDropzone = (input) => {
+    if (!input) return;
+    const wrapper = input.closest(".upload-dropzone");
+    if (!wrapper) return;
+
+    const highlight = (event) => {
+      event.preventDefault();
+      wrapper.classList.add("is-dragover");
+    };
+    const unhighlight = (event) => {
+      event.preventDefault();
+      wrapper.classList.remove("is-dragover");
+    };
+    const handleDrop = (event) => {
+      event.preventDefault();
+      wrapper.classList.remove("is-dragover");
+      const files = event.dataTransfer?.files;
+      if (!files || files.length === 0) return;
+      const dataTransfer = new DataTransfer();
+      Array.from(files).forEach((file) => dataTransfer.items.add(file));
+      input.files = dataTransfer.files;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+
+    wrapper.addEventListener("dragenter", highlight);
+    wrapper.addEventListener("dragover", highlight);
+    wrapper.addEventListener("dragleave", unhighlight);
+    wrapper.addEventListener("drop", handleDrop);
+  };
+
   const attachFileHandler = (input, handler) => {
     input.addEventListener("change", handler);
     input.onchange = handler;
@@ -1874,6 +1915,13 @@ async function init() {
       { name: "Расход", keys: ["расход", "стоимость", "сумма"], required: true }
     ], stencilsFallback)
   );
+
+  setupDatePicker(elements.startDate);
+  setupDatePicker(elements.endDate);
+  setupDropzone(elements.accrualsFile);
+  setupDropzone(elements.ordersFile);
+  setupDropzone(elements.pvpFile);
+  setupDropzone(elements.stencilsFile);
 
   if (elements.signInButton) {
     elements.signInButton.addEventListener("click", async () => {
