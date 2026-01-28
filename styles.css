@@ -381,19 +381,26 @@ select:focus {
 }
 
 .info-links {
-  display: grid;
-  gap: 10px;
-  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  font-size: 12px;
 }
 
 .info-links a {
   color: var(--primary);
   text-decoration: none;
   font-weight: 600;
+  font-size: 13px;
 }
 
 .info-links a:hover {
   text-decoration: underline;
+}
+
+.info-panel {
+  padding: 12px 16px;
 }
 
 .summary .row {

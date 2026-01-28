@@ -81,7 +81,8 @@ const state = {
     periods: [],
     selectedKey: "",
     entries: {},
-    saveTimer: null
+    saveTimer: null,
+    taxRate: 6
   }
 };
 
@@ -129,6 +130,7 @@ const elements = {
   buyCreditsButtons: Array.from(document.querySelectorAll(".buy-credits-button")),
   cashflowYear: document.getElementById("cashflowYear"),
   cashflowGranularity: document.getElementById("cashflowGranularity"),
+  cashflowTaxRate: document.getElementById("cashflowTaxRate"),
   cashflowSavePeriod: document.getElementById("cashflowSavePeriod"),
   cashflowStatus: document.getElementById("cashflowStatus"),
   cashflowBody: document.getElementById("cashflowBody")
@@ -687,6 +689,7 @@ function validateElements() {
   if (!elements.buyCreditsStatus) missing.push("buyCreditsStatus");
   if (!elements.cashflowYear) missing.push("cashflowYear");
   if (!elements.cashflowGranularity) missing.push("cashflowGranularity");
+  if (!elements.cashflowTaxRate) missing.push("cashflowTaxRate");
   if (!elements.cashflowSavePeriod) missing.push("cashflowSavePeriod");
   if (!elements.cashflowStatus) missing.push("cashflowStatus");
   if (!elements.cashflowBody) missing.push("cashflowBody");
@@ -1026,7 +1029,8 @@ function renderCashflowTable() {
         accruals !== null && marginForCalc !== null
           ? accruals * (1 - marginForCalc)
           : null;
-      const taxesCalc = accruals !== null ? accruals * 0.06 : null;
+      const taxRate = Number(state.cashflow.taxRate || 0) / 100;
+      const taxesCalc = accruals !== null ? accruals * taxRate : null;
       const procurementActual = Number.isFinite(entry.procurementActual)
         ? entry.procurementActual
         : null;
@@ -1165,6 +1169,25 @@ async function calculateRemote() {
       scheduleCashflowSave();
     }
   }
+}
+
+async function initUserRemote() {
+  if (!state.user) return null;
+  const token = await state.user.getIdToken();
+  const response = await fetch(`${FUNCTIONS_BASE_URL}/initUser`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({})
+  });
+  const data = await response.json();
+  if (!response.ok || !data || !data.ok) {
+    const errorMessage = data && data.error ? data.error : "Ошибка сервера.";
+    throw new Error(errorMessage);
+  }
+  return data.credits;
 }
 
 async function createPaymentRemote(packId) {
@@ -1565,11 +1588,16 @@ async function loadUserCredits(user) {
     updateAuthUI(null);
     return;
   }
-  const ref = doc(db, "users", user.uid);
-  const snapshot = await getDoc(ref);
-  const data = snapshot.exists() ? snapshot.data() || {} : {};
-  const credits = Number(data.credits || 0);
-  state.userCredits = Number.isFinite(credits) ? credits : 0;
+  try {
+    const credits = await initUserRemote();
+    state.userCredits = Number.isFinite(credits) ? credits : 0;
+  } catch (error) {
+    const ref = doc(db, "users", user.uid);
+    const snapshot = await getDoc(ref);
+    const data = snapshot.exists() ? snapshot.data() || {} : {};
+    const credits = Number(data.credits || 0);
+    state.userCredits = Number.isFinite(credits) ? credits : 0;
+  }
   updateAuthUI(user);
 }
 
@@ -1688,6 +1716,14 @@ async function init() {
     elements.cashflowGranularity.addEventListener("change", () => {
       state.cashflow.granularity = elements.cashflowGranularity.value;
       refreshCashflowView();
+    });
+  }
+  if (elements.cashflowTaxRate) {
+    elements.cashflowTaxRate.value = String(state.cashflow.taxRate);
+    elements.cashflowTaxRate.addEventListener("change", () => {
+      const value = parseNumber(elements.cashflowTaxRate.value);
+      state.cashflow.taxRate = Number.isFinite(value) ? value : 0;
+      renderCashflowTable();
     });
   }
   if (elements.cashflowSavePeriod) {

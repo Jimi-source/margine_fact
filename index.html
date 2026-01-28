@@ -46,9 +46,6 @@
         <div class="header-row">
           <div>
             <h1>Фактическая маржа за период</h1>
-            <p class="muted">
-              Даты по заказам фильтруются по полю <span class="mono">Delivery date</span>.
-            </p>
           </div>
           <div class="auth-box">
             <div id="authState" class="muted">Гость</div>
@@ -62,28 +59,28 @@
       <section class="card credits-panel">
         <div class="credits-panel-header">
           <div>
-            <h2>Кредиты и оплата</h2>
+            <h2>Токены и оплата</h2>
             <p class="muted">
-              1 кредит = 1 расчет отчёта. Кредиты списываются при каждом расчёте.
+              1 токен = 1 расчет отчёта. Токены списываются при каждом расчёте.
             </p>
           </div>
           <div class="credits-panel-balance">
-            <div class="muted">Баланс</div>
+            <div class="muted">Баланс токенов</div>
             <div id="creditsPanelValue" class="credits-value">—</div>
           </div>
         </div>
         <div class="buy-credits-grid">
           <button type="button" class="ghost-button buy-credits-button" data-pack="1">
-            1 кредит — 150 ₽
+            Купить 1 токен — 150 руб
           </button>
           <button type="button" class="ghost-button buy-credits-button" data-pack="3">
-            3 кредита — 400 ₽
+            Купить 3 токена — 400 руб
           </button>
           <button type="button" class="ghost-button buy-credits-button" data-pack="5">
-            5 кредитов — 650 ₽
+            Купить 5 токенов — 650 руб
           </button>
           <button type="button" class="ghost-button buy-credits-button" data-pack="10">
-            10 кредитов — 1 250 ₽
+            Купить 10 токенов — 1 250 руб
           </button>
         </div>
         <div id="buyCreditsStatus" class="status"></div>
@@ -181,24 +178,14 @@
         <div id="missingCostBlock" class="missing-cost hidden"></div>
       </section>
 
-      <section class="card tab-panel" data-panel="calc">
-        <h2>Информация для оплаты</h2>
+      <section class="card tab-panel info-panel" data-panel="calc">
         <div class="info-links">
-          <a href="/pricing.html" target="_blank" rel="noopener">
-            Товары/услуги, цены и описания
-          </a>
-          <a href="/delivery.html" target="_blank" rel="noopener">
-            Как получить заказ после оплаты
-          </a>
-          <a href="/offer.html" target="_blank" rel="noopener">
-            Пользовательское соглашение (оферта)
-          </a>
-          <a href="/contacts.html" target="_blank" rel="noopener">
-            Контакты и реквизиты
-          </a>
-          <a href="/privacy.html" target="_blank" rel="noopener">
-            Политика конфиденциальности
-          </a>
+          <span class="muted">Документы для оплаты:</span>
+          <a href="/pricing.html" target="_blank" rel="noopener">Тарифы</a>
+          <a href="/delivery.html" target="_blank" rel="noopener">Получение</a>
+          <a href="/offer.html" target="_blank" rel="noopener">Оферта</a>
+          <a href="/contacts.html" target="_blank" rel="noopener">Контакты</a>
+          <a href="/privacy.html" target="_blank" rel="noopener">Политика</a>
         </div>
       </section>
 
@@ -241,9 +228,6 @@
 
       <section class="card tab-panel hidden" data-panel="cashflow">
         <h2>Cashflow</h2>
-        <p class="muted">
-          Сохраняйте маржу по периодам, указывайте начисления и фиксируйте факт.
-        </p>
         <div class="grid">
           <label>
             Год
@@ -258,6 +242,10 @@
               <option value="quarter">По кварталам</option>
               <option value="year">За год</option>
             </select>
+          </label>
+          <label>
+            Налоги (расчет), %
+            <input type="number" id="cashflowTaxRate" min="0" step="0.1" />
           </label>
         </div>
         <p class="muted">
