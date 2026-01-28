@@ -3,6 +3,9 @@ import {
   getAuth,
   GoogleAuthProvider,
   onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signOut
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
@@ -101,6 +104,11 @@ const elements = {
   creditsState: document.getElementById("creditsState"),
   authStatus: document.getElementById("authStatus"),
   signInButton: document.getElementById("signInButton"),
+  emailAuth: document.getElementById("emailAuth"),
+  passwordAuth: document.getElementById("passwordAuth"),
+  emailSignIn: document.getElementById("emailSignIn"),
+  emailSignUp: document.getElementById("emailSignUp"),
+  emailReset: document.getElementById("emailReset"),
   signOutButton: document.getElementById("signOutButton"),
   tabButtons: Array.from(document.querySelectorAll(".tab-button")),
   tabPanels: Array.from(document.querySelectorAll(".tab-panel")),
@@ -651,6 +659,11 @@ function validateElements() {
   if (!elements.creditsState) missing.push("creditsState");
   if (!elements.authStatus) missing.push("authStatus");
   if (!elements.signInButton) missing.push("signInButton");
+  if (!elements.emailAuth) missing.push("emailAuth");
+  if (!elements.passwordAuth) missing.push("passwordAuth");
+  if (!elements.emailSignIn) missing.push("emailSignIn");
+  if (!elements.emailSignUp) missing.push("emailSignUp");
+  if (!elements.emailReset) missing.push("emailReset");
   if (!elements.signOutButton) missing.push("signOutButton");
   if (!elements.sebesBody) missing.push("sebesBody");
   if (!elements.sebesStatus) missing.push("sebesStatus");
@@ -1795,6 +1808,60 @@ async function init() {
           setAuthStatus("Вход отменён пользователем.", true);
           return;
         }
+        setAuthStatus(mapAuthError(error), true);
+      }
+    });
+  }
+  if (elements.emailSignIn) {
+    elements.emailSignIn.addEventListener("click", async () => {
+      const email = elements.emailAuth ? elements.emailAuth.value.trim() : "";
+      const password = elements.passwordAuth ? elements.passwordAuth.value : "";
+      if (!email || !password) {
+        setAuthStatus("Введите email и пароль.", true);
+        return;
+      }
+      try {
+        setAuthStatus("Выполняю вход…");
+        await signInWithEmailAndPassword(auth, email, password);
+        setAuthStatus("");
+      } catch (error) {
+        setAuthStatus(mapAuthError(error), true);
+      }
+    });
+  }
+  if (elements.emailSignUp) {
+    elements.emailSignUp.addEventListener("click", async () => {
+      const email = elements.emailAuth ? elements.emailAuth.value.trim() : "";
+      const password = elements.passwordAuth ? elements.passwordAuth.value : "";
+      if (!email || !password) {
+        setAuthStatus("Введите email и пароль.", true);
+        return;
+      }
+      if (password.length < 6) {
+        setAuthStatus("Пароль должен быть не короче 6 символов.", true);
+        return;
+      }
+      try {
+        setAuthStatus("Создаю аккаунт…");
+        await createUserWithEmailAndPassword(auth, email, password);
+        setAuthStatus("");
+      } catch (error) {
+        setAuthStatus(mapAuthError(error), true);
+      }
+    });
+  }
+  if (elements.emailReset) {
+    elements.emailReset.addEventListener("click", async () => {
+      const email = elements.emailAuth ? elements.emailAuth.value.trim() : "";
+      if (!email) {
+        setAuthStatus("Введите email для восстановления.", true);
+        return;
+      }
+      try {
+        setAuthStatus("Отправляю письмо для восстановления…");
+        await sendPasswordResetEmail(auth, email);
+        setAuthStatus("Письмо для восстановления отправлено.");
+      } catch (error) {
         setAuthStatus(mapAuthError(error), true);
       }
     });
