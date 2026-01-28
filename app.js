@@ -48,7 +48,7 @@ const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 
 const XLSXLib = window.XLSX;
-if (XLSXLib && window.cptable) {
+if (XLSXLib && window.cptable && typeof XLSXLib.set_cptable === "function") {
   XLSXLib.set_cptable(window.cptable);
 }
 
