@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Предобработка отчета Начисления</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <section class="card">
+        <h2>Предобработка отчета Начисления</h2>
+        <p class="muted">
+          Инструмент удаляет первую строку и сохраняет новый файл для расчета.
+        </p>
+        <label class="upload-dropzone">
+          Выберите файл Начисления
+          <input type="file" id="accrualsPreprocessFile" accept=".xlsx,.xls" />
+          <span class="upload-hint muted">Перетащите файл сюда или нажмите для выбора</span>
+          <div class="upload-file-info hidden">
+            <span class="file-icon" aria-hidden="true"></span>
+            <span class="file-name">Файл не выбран</span>
+            <button type="button" class="ghost-button upload-remove">Удалить</button>
+          </div>
+        </label>
+        <button type="button" id="downloadPrepared" class="primary-button" disabled>
+          Скачать обработанный файл
+        </button>
+        <div id="preprocessStatus" class="status"></div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/cpexcel.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script>
+      if (window.XLSX && window.cptable) {
+        XLSX.set_cptable(window.cptable);
+      }
+
+      const fileInput = document.getElementById("accrualsPreprocessFile");
+      const downloadButton = document.getElementById("downloadPrepared");
+      const statusEl = document.getElementById("preprocessStatus");
+      const wrapper = fileInput.closest(".upload-dropzone");
+      const fileInfo = wrapper.querySelector(".upload-file-info");
+      const fileName = wrapper.querySelector(".file-name");
+      const removeButton = wrapper.querySelector(".upload-remove");
+
+      let preparedBlob = null;
+      let preparedName = "";
+
+      const setStatus = (text, isError = false) => {
+        statusEl.textContent = text;
+        statusEl.classList.toggle("error", isError);
+      };
+
+      const setUI = (file) => {
+        if (file) {
+          wrapper.classList.add("has-file");
+          fileInfo.classList.remove("hidden");
+          fileName.textContent = file.name;
+        } else {
+          wrapper.classList.remove("has-file");
+          fileInfo.classList.add("hidden");
+          fileName.textContent = "Файл не выбран";
+        }
+      };
+
+      const clearPrepared = () => {
+        preparedBlob = null;
+        preparedName = "";
+        downloadButton.disabled = true;
+      };
+
+      const removeFirstRow = (sheet) => {
+        const ref = sheet["!ref"];
+        if (!ref) return sheet;
+        const range = XLSX.utils.decode_range(ref);
+        const removeRow = range.s.r;
+        const nextSheet = {};
+        Object.keys(sheet).forEach((key) => {
+          if (key[0] === "!") return;
+          const cell = XLSX.utils.decode_cell(key);
+          if (cell.r === removeRow) return;
+          const target = { c: cell.c, r: cell.r > removeRow ? cell.r - 1 : cell.r };
+          const targetKey = XLSX.utils.encode_cell(target);
+          nextSheet[targetKey] = sheet[key];
+        });
+        const nextRange = {
+          s: { c: range.s.c, r: range.s.r },
+          e: { c: range.e.c, r: Math.max(range.s.r, range.e.r - 1) }
+        };
+        nextSheet["!ref"] = XLSX.utils.encode_range(nextRange);
+        if (sheet["!cols"]) nextSheet["!cols"] = sheet["!cols"];
+        if (sheet["!rows"]) nextSheet["!rows"] = sheet["!rows"];
+        if (sheet["!merges"]) {
+          const merges = [];
+          sheet["!merges"].forEach((merge) => {
+            if (merge.s.r <= removeRow && merge.e.r >= removeRow) {
+              return;
+            }
+            if (merge.s.r > removeRow) {
+              merges.push({
+                s: { c: merge.s.c, r: merge.s.r - 1 },
+                e: { c: merge.e.c, r: merge.e.r - 1 }
+              });
+              return;
+            }
+            merges.push(merge);
+          });
+          if (merges.length > 0) nextSheet["!merges"] = merges;
+        }
+        return nextSheet;
+      };
+
+      const preprocessFile = async (file) => {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const nextSheet = removeFirstRow(sheet);
+        const nextBook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(nextBook, nextSheet, sheetName);
+        const output = XLSX.write(nextBook, { bookType: "xlsx", type: "array" });
+        preparedBlob = new Blob([output], {
+          type:
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        });
+        preparedName = file.name.replace(/\.xls[x]?$/i, "") + ".prepared.xlsx";
+        downloadButton.disabled = false;
+      };
+
+      fileInput.addEventListener("change", async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        try {
+          setStatus("Обрабатываю файл...");
+          setUI(file);
+          await preprocessFile(file);
+          setStatus("Готово. Нажмите «Скачать обработанный файл».");
+        } catch (error) {
+          clearPrepared();
+          setStatus(`Ошибка: ${error.message}`, true);
+        }
+      });
+
+      removeButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        fileInput.value = "";
+        setUI(null);
+        clearPrepared();
+        setStatus("");
+      });
+
+      wrapper.addEventListener("dragenter", (event) => {
+        event.preventDefault();
+        wrapper.classList.add("is-dragover");
+      });
+      wrapper.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        wrapper.classList.add("is-dragover");
+      });
+      wrapper.addEventListener("dragleave", (event) => {
+        event.preventDefault();
+        wrapper.classList.remove("is-dragover");
+      });
+      wrapper.addEventListener("drop", async (event) => {
+        event.preventDefault();
+        wrapper.classList.remove("is-dragover");
+        const files = event.dataTransfer?.files;
+        if (!files || files.length === 0) return;
+        const dataTransfer = new DataTransfer();
+        Array.from(files).forEach((f) => dataTransfer.items.add(f));
+        fileInput.files = dataTransfer.files;
+        fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+
+      downloadButton.addEventListener("click", () => {
+        if (!preparedBlob) return;
+        const url = URL.createObjectURL(preparedBlob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = preparedName;
+        link.click();
+        URL.revokeObjectURL(url);
+      });
+    </script>
+  </body>
+</html>

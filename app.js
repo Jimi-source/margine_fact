@@ -48,6 +48,9 @@ const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 
 const XLSXLib = window.XLSX;
+if (XLSXLib && window.cptable) {
+  XLSXLib.set_cptable(window.cptable);
+}
 
 const FUNCTIONS_BASE_URL = "https://us-central1-marginefact.cloudfunctions.net";
 
@@ -548,15 +551,43 @@ function removeFirstRowFromWorkbook(workbook) {
   workbook.SheetNames.forEach((sheetName) => {
     const sheet = workbook.Sheets[sheetName];
     if (!sheet) return;
-    const rows = XLSXLib.utils.sheet_to_json(sheet, {
-      header: 1,
-      raw: true,
-      defval: null
+    const ref = sheet["!ref"];
+    if (!ref) return;
+    const range = XLSXLib.utils.decode_range(ref);
+    const removeRow = range.s.r;
+    const nextSheet = {};
+    Object.keys(sheet).forEach((key) => {
+      if (key[0] === "!") return;
+      const cell = XLSXLib.utils.decode_cell(key);
+      if (cell.r === removeRow) return;
+      const target = { c: cell.c, r: cell.r > removeRow ? cell.r - 1 : cell.r };
+      const targetKey = XLSXLib.utils.encode_cell(target);
+      nextSheet[targetKey] = sheet[key];
     });
-    if (rows.length > 0) {
-      rows.shift();
+    const nextRange = {
+      s: { c: range.s.c, r: range.s.r },
+      e: { c: range.e.c, r: Math.max(range.s.r, range.e.r - 1) }
+    };
+    nextSheet["!ref"] = XLSXLib.utils.encode_range(nextRange);
+    if (sheet["!cols"]) nextSheet["!cols"] = sheet["!cols"];
+    if (sheet["!rows"]) nextSheet["!rows"] = sheet["!rows"];
+    if (sheet["!merges"]) {
+      const merges = [];
+      sheet["!merges"].forEach((merge) => {
+        if (merge.s.r <= removeRow && merge.e.r >= removeRow) {
+          return;
+        }
+        if (merge.s.r > removeRow) {
+          merges.push({
+            s: { c: merge.s.c, r: merge.s.r - 1 },
+            e: { c: merge.e.c, r: merge.e.r - 1 }
+          });
+          return;
+        }
+        merges.push(merge);
+      });
+      if (merges.length > 0) nextSheet["!merges"] = merges;
     }
-    const nextSheet = XLSXLib.utils.aoa_to_sheet(rows);
     XLSXLib.utils.book_append_sheet(nextWorkbook, nextSheet, sheetName);
   });
   return nextWorkbook;
