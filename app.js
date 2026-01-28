@@ -315,6 +315,103 @@ function pickBestHeaderRow(rows, schema) {
   return best;
 }
 
+function columnToIndex(label) {
+  let index = 0;
+  for (let i = 0; i < label.length; i += 1) {
+    const code = label.charCodeAt(i);
+    if (code < 65 || code > 90) continue;
+    index = index * 26 + (code - 64);
+  }
+  return index;
+}
+
+function parseWorksheetXmlToRows(xmlText, sharedStrings) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, "application/xml");
+  const rowNodes = Array.from(doc.getElementsByTagName("row"));
+  const rows = [];
+  rowNodes.forEach((rowNode) => {
+    const rowIndex = Number(rowNode.getAttribute("r")) || rows.length + 1;
+    const row = [];
+    const cells = Array.from(rowNode.getElementsByTagName("c"));
+    let implicitCol = 1;
+    cells.forEach((cell) => {
+      const ref = cell.getAttribute("r");
+      const type = cell.getAttribute("t");
+      let colIndex = implicitCol;
+      if (ref) {
+        const colLabel = ref.replace(/[0-9]/g, "").toUpperCase();
+        colIndex = columnToIndex(colLabel) || implicitCol;
+      }
+      implicitCol = colIndex + 1;
+      let value = "";
+      if (type === "inlineStr") {
+        const tNode = cell.getElementsByTagName("t")[0];
+        value = tNode ? tNode.textContent || "" : "";
+      } else {
+        const vNode = cell.getElementsByTagName("v")[0];
+        value = vNode ? vNode.textContent || "" : "";
+        if (type === "s") {
+          const idx = Number(value);
+          value = sharedStrings[idx] ?? "";
+        } else if (type !== "str" && value !== "" && !Number.isNaN(Number(value))) {
+          value = Number(value);
+        }
+      }
+      row[colIndex - 1] = value;
+    });
+    for (let i = 0; i < row.length; i += 1) {
+      if (row[i] === undefined) row[i] = "";
+    }
+    rows[rowIndex - 1] = row;
+  });
+  return rows.map((row) => row || []);
+}
+
+function buildRowsFromWorkbookFiles(workbook) {
+  if (!workbook || !workbook.files) return null;
+  const getFileText = (path) => {
+    const entry = workbook.files[path];
+    if (!entry || !entry.content) return null;
+    if (typeof entry.content === "string") return entry.content;
+    try {
+      return new TextDecoder("utf-8").decode(entry.content);
+    } catch (error) {
+      return null;
+    }
+  };
+  const workbookXml = getFileText("xl/workbook.xml");
+  const relsXml = getFileText("xl/_rels/workbook.xml.rels");
+  if (!workbookXml || !relsXml) return null;
+  const parser = new DOMParser();
+  const wbDoc = parser.parseFromString(workbookXml, "application/xml");
+  const sheet = wbDoc.getElementsByTagName("sheet")[0];
+  if (!sheet) return null;
+  const relId = sheet.getAttribute("r:id") || sheet.getAttribute("id");
+  if (!relId) return null;
+  const relsDoc = parser.parseFromString(relsXml, "application/xml");
+  const relationships = Array.from(relsDoc.getElementsByTagName("Relationship"));
+  const rel = relationships.find((item) => item.getAttribute("Id") === relId);
+  if (!rel) return null;
+  let target = rel.getAttribute("Target") || "";
+  if (target.startsWith("/")) target = target.slice(1);
+  if (!target.startsWith("xl/")) target = `xl/${target}`;
+  const sheetXml = getFileText(target);
+  if (!sheetXml) return null;
+  const sharedXml = getFileText("xl/sharedStrings.xml");
+  let sharedStrings = [];
+  if (sharedXml) {
+    const sharedDoc = parser.parseFromString(sharedXml, "application/xml");
+    sharedStrings = Array.from(sharedDoc.getElementsByTagName("si")).map((si) => {
+      const texts = Array.from(si.getElementsByTagName("t")).map(
+        (node) => node.textContent || ""
+      );
+      return texts.join("");
+    });
+  }
+  return parseWorksheetXmlToRows(sheetXml, sharedStrings);
+}
+
 function fixCyrillicMojibake(value) {
   if (typeof value !== "string" || value.length === 0) return value;
   const bytes = Uint8Array.from(
@@ -390,11 +487,7 @@ function findColumnIndexByKeys(normalizedHeaders, keys) {
   return -1;
 }
 
-function extractRowsBySchemaFromSheet(sheet, schema, options = {}) {
-  const rows = XLSXLib.utils.sheet_to_json(sheet, {
-    header: 1,
-    defval: ""
-  });
+function extractRowsBySchemaFromRows(rows, schema, options = {}) {
   const normalizeCell = options.normalizeCell;
   const normalizedRows = normalizeCell
     ? rows.map((row) => row.map((cell) => normalizeCell(cell)))
@@ -428,6 +521,14 @@ function extractRowsBySchemaFromSheet(sheet, schema, options = {}) {
   return { data, headerIndex: best.idx, score: best.score, missing: 0 };
 }
 
+function extractRowsBySchemaFromSheet(sheet, schema, options = {}) {
+  const rows = XLSXLib.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: ""
+  });
+  return extractRowsBySchemaFromRows(rows, schema, options);
+}
+
 function extractRowsBySchema(workbook, schema, options = {}) {
   let bestResult = null;
   let bestSheet = null;
@@ -457,11 +558,7 @@ function normalizeSchema(schema) {
   }));
 }
 
-function extractRowsByPositionsFromSheet(sheet, schema, fallback, options = {}) {
-  const rows = XLSXLib.utils.sheet_to_json(sheet, {
-    header: 1,
-    defval: ""
-  });
+function extractRowsByPositionsFromRows(rows, schema, fallback, options = {}) {
   const normalizeCell = options.normalizeCell;
   const normalizedRows = normalizeCell
     ? rows.map((row) => row.map((cell) => normalizeCell(cell)))
@@ -484,6 +581,14 @@ function extractRowsByPositionsFromSheet(sheet, schema, fallback, options = {}) 
     data.push(rowObject);
   }
   return data;
+}
+
+function extractRowsByPositionsFromSheet(sheet, schema, fallback, options = {}) {
+  const rows = XLSXLib.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: ""
+  });
+  return extractRowsByPositionsFromRows(rows, schema, fallback, options);
 }
 
 function extractRowsBySchemaOrPositions(workbook, schema, fallback, options = {}) {
@@ -510,6 +615,23 @@ function extractRowsBySchemaOrPositions(workbook, schema, fallback, options = {}
     );
   }
   return bestData;
+}
+
+function extractRowsBySchemaOrPositionsFromRows(rows, schema, fallback, options = {}) {
+  try {
+    const result = extractRowsBySchemaFromRows(rows, schema, options);
+    if (result.data) return result.data;
+  } catch (error) {
+    if (!fallback) throw error;
+  }
+  if (!fallback) {
+    throw new Error(
+      `Не удалось найти строку заголовков (${schema
+        .map((item) => item.name)
+        .join(", ")}).`
+    );
+  }
+  return extractRowsByPositionsFromRows(rows, schema, fallback, options);
 }
 
 function isRowEmpty(row) {
@@ -606,7 +728,7 @@ function inRange(date, start, end) {
   return time >= startTime && time <= endTime;
 }
 
-async function readWorkbook(file) {
+async function readWorkbook(file, options = {}) {
   const name = String(file && file.name ? file.name : "").toLowerCase();
   if (name.endsWith(".csv")) {
     const text = await file.text();
@@ -617,11 +739,12 @@ async function readWorkbook(file) {
       type: "string",
       FS: delimiter,
       raw: true,
-      cellDates: true
+      cellDates: true,
+      ...options
     });
   }
   const buffer = await file.arrayBuffer();
-  return XLSXLib.read(buffer, { type: "array", cellDates: true });
+  return XLSXLib.read(buffer, { type: "array", cellDates: true, ...options });
 }
 
 function removeFirstRowFromWorkbook(workbook) {
@@ -1653,16 +1776,29 @@ function onFileChange(type, schema, fallback) {
     const file = event.target.files[0];
     if (!file) return;
     try {
-      const workbook = await readWorkbook(file);
-      const data = extractRowsBySchemaOrPositions(
-        workbook,
-        normalizeSchema(schema),
-        fallback,
-        {
+      const workbook = await readWorkbook(file, { bookFiles: type === "accruals" });
+      const normalizedSchema = normalizeSchema(schema);
+      let data = null;
+      if (type === "accruals") {
+        const rowsFromXml = buildRowsFromWorkbookFiles(workbook);
+        if (rowsFromXml && rowsFromXml.length > 0) {
+          const firstCell = String(rowsFromXml[0]?.[0] || "").toLowerCase();
+          const skipFirstRow = firstCell.includes("период");
+          data = extractRowsBySchemaOrPositionsFromRows(
+            rowsFromXml,
+            normalizedSchema,
+            fallback,
+            { skipFirstRow }
+          );
+        }
+      }
+      if (!data) {
+        const options = {
           skipFirstRow: type === "accruals",
           normalizeCell: type === "accruals" ? fixCyrillicMojibake : null
-        }
-      );
+        };
+        data = extractRowsBySchemaOrPositions(workbook, normalizedSchema, fallback, options);
+      }
       state[type] = data;
       if (type === "accruals") {
         const dates = data
