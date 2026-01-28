@@ -542,6 +542,26 @@ async function readWorkbook(file) {
   return XLSXLib.read(buffer, { type: "array", cellDates: true });
 }
 
+function removeFirstRowFromWorkbook(workbook) {
+  if (!workbook || !workbook.SheetNames) return workbook;
+  const nextWorkbook = XLSXLib.utils.book_new();
+  workbook.SheetNames.forEach((sheetName) => {
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) return;
+    const rows = XLSXLib.utils.sheet_to_json(sheet, {
+      header: 1,
+      raw: true,
+      defval: null
+    });
+    if (rows.length > 0) {
+      rows.shift();
+    }
+    const nextSheet = XLSXLib.utils.aoa_to_sheet(rows);
+    XLSXLib.utils.book_append_sheet(nextWorkbook, nextSheet, sheetName);
+  });
+  return nextWorkbook;
+}
+
 function toISODate(date) {
   if (!date) return "";
   const year = date.getFullYear();
@@ -1523,7 +1543,10 @@ function onFileChange(type, schema, fallback) {
     const file = event.target.files[0];
     if (!file) return;
     try {
-      const workbook = await readWorkbook(file);
+      let workbook = await readWorkbook(file);
+      if (type === "accruals") {
+        workbook = removeFirstRowFromWorkbook(workbook);
+      }
       const data = extractRowsBySchemaOrPositions(
         workbook,
         normalizeSchema(schema),
