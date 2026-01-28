@@ -323,16 +323,19 @@ function findColumnIndexByKeys(normalizedHeaders, keys) {
   return -1;
 }
 
-function extractRowsBySchemaFromSheet(sheet, schema) {
+function extractRowsBySchemaFromSheet(sheet, schema, options = {}) {
   const rows = XLSXLib.utils.sheet_to_json(sheet, {
     header: 1,
     defval: ""
   });
-  const best = pickBestHeaderRow(rows, schema);
+  const workingRows = options.skipFirstRow ? rows.slice(1) : rows;
+  const best = pickBestHeaderRow(workingRows, schema);
   if (best.idx === -1 || best.missing > 0) {
     return { data: null, headerIndex: -1, score: best.score, missing: best.missing };
   }
-  const headerRow = rows[best.idx].map((value) => String(value || "").trim());
+  const headerRow = workingRows[best.idx].map((value) =>
+    String(value || "").trim()
+  );
   const normalized = headerRow.map(normalizeKey);
   const columnMap = new Map();
   schema.forEach((item) => {
@@ -342,8 +345,8 @@ function extractRowsBySchemaFromSheet(sheet, schema) {
     }
   });
   const data = [];
-  for (let i = best.idx + 1; i < rows.length; i += 1) {
-    const row = rows[i];
+  for (let i = best.idx + 1; i < workingRows.length; i += 1) {
+    const row = workingRows[i];
     if (!row || isRowEmpty(row)) continue;
     const rowObject = {};
     columnMap.forEach((name, idx) => {
@@ -354,12 +357,12 @@ function extractRowsBySchemaFromSheet(sheet, schema) {
   return { data, headerIndex: best.idx, score: best.score, missing: 0 };
 }
 
-function extractRowsBySchema(workbook, schema) {
+function extractRowsBySchema(workbook, schema, options = {}) {
   let bestResult = null;
   let bestSheet = null;
   workbook.SheetNames.forEach((sheetName) => {
     const sheet = workbook.Sheets[sheetName];
-    const result = extractRowsBySchemaFromSheet(sheet, schema);
+    const result = extractRowsBySchemaFromSheet(sheet, schema, options);
     if (result.data && (!bestResult || result.score > bestResult.score)) {
       bestResult = result;
       bestSheet = sheetName;
@@ -383,20 +386,21 @@ function normalizeSchema(schema) {
   }));
 }
 
-function extractRowsByPositionsFromSheet(sheet, schema, fallback) {
+function extractRowsByPositionsFromSheet(sheet, schema, fallback, options = {}) {
   const rows = XLSXLib.utils.sheet_to_json(sheet, {
     header: 1,
     defval: ""
   });
+  const workingRows = options.skipFirstRow ? rows.slice(1) : rows;
   let startRow = fallback.startRow || 1;
-  const headerScore = scoreHeaderRow(rows[startRow], schema);
+  const headerScore = scoreHeaderRow(workingRows[startRow], schema);
   const requiredCount = schema.filter((item) => item.required).length;
   if (headerScore.matched >= requiredCount) {
     startRow += 1;
   }
   const data = [];
-  for (let i = startRow; i < rows.length; i += 1) {
-    const row = rows[i];
+  for (let i = startRow; i < workingRows.length; i += 1) {
+    const row = workingRows[i];
     if (!row || isRowEmpty(row)) continue;
     const rowObject = {};
     Object.entries(fallback.positions).forEach(([name, idx]) => {
@@ -407,9 +411,9 @@ function extractRowsByPositionsFromSheet(sheet, schema, fallback) {
   return data;
 }
 
-function extractRowsBySchemaOrPositions(workbook, schema, fallback) {
+function extractRowsBySchemaOrPositions(workbook, schema, fallback, options = {}) {
   try {
-    return extractRowsBySchema(workbook, schema);
+    return extractRowsBySchema(workbook, schema, options);
   } catch (error) {
     if (!fallback) throw error;
   }
@@ -417,7 +421,7 @@ function extractRowsBySchemaOrPositions(workbook, schema, fallback) {
   let bestSheet = null;
   workbook.SheetNames.forEach((sheetName) => {
     const sheet = workbook.Sheets[sheetName];
-    const data = extractRowsByPositionsFromSheet(sheet, schema, fallback);
+    const data = extractRowsByPositionsFromSheet(sheet, schema, fallback, options);
     if (data.length > 0 && (!bestData || data.length > bestData.length)) {
       bestData = data;
       bestSheet = sheetName;
@@ -1574,14 +1578,12 @@ function onFileChange(type, schema, fallback) {
     const file = event.target.files[0];
     if (!file) return;
     try {
-      let workbook = await readWorkbook(file);
-      if (type === "accruals") {
-        workbook = removeFirstRowFromWorkbook(workbook);
-      }
+      const workbook = await readWorkbook(file);
       const data = extractRowsBySchemaOrPositions(
         workbook,
         normalizeSchema(schema),
-        fallback
+        fallback,
+        { skipFirstRow: type === "accruals" }
       );
       state[type] = data;
       if (type === "accruals") {
