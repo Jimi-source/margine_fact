@@ -120,21 +120,41 @@
             Начисления (обязательный)
             <input type="file" id="accrualsFile" accept=".xlsx,.xls" />
             <span class="upload-hint muted">Перетащите файл сюда или нажмите для выбора</span>
+            <div class="upload-file-info hidden">
+              <span class="file-icon" aria-hidden="true"></span>
+              <span class="file-name">Файл не выбран</span>
+              <button type="button" class="ghost-button upload-remove">Удалить</button>
+            </div>
           </label>
           <label class="upload-dropzone">
             Заказы (обязательный)
             <input type="file" id="ordersFile" accept=".xlsx,.xls,.csv" />
             <span class="upload-hint muted">Перетащите файл сюда или нажмите для выбора</span>
+            <div class="upload-file-info hidden">
+              <span class="file-icon" aria-hidden="true"></span>
+              <span class="file-name">Файл не выбран</span>
+              <button type="button" class="ghost-button upload-remove">Удалить</button>
+            </div>
           </label>
           <label class="upload-dropzone">
             ПВП (необязательный)
             <input type="file" id="pvpFile" accept=".xlsx,.xls" />
             <span class="upload-hint muted">Перетащите файл сюда или нажмите для выбора</span>
+            <div class="upload-file-info hidden">
+              <span class="file-icon" aria-hidden="true"></span>
+              <span class="file-name">Файл не выбран</span>
+              <button type="button" class="ghost-button upload-remove">Удалить</button>
+            </div>
           </label>
           <label class="upload-dropzone">
             Трафареты (необязательный)
             <input type="file" id="stencilsFile" accept=".xlsx,.xls" />
             <span class="upload-hint muted">Перетащите файл сюда или нажмите для выбора</span>
+            <div class="upload-file-info hidden">
+              <span class="file-icon" aria-hidden="true"></span>
+              <span class="file-name">Файл не выбран</span>
+              <button type="button" class="ghost-button upload-remove">Удалить</button>
+            </div>
           </label>
         </div>
         <button type="button" id="calcButton" class="primary-button" disabled>

@@ -1478,6 +1478,46 @@ function onDateChange() {
   updateStatus();
 }
 
+function getUploadUI(input) {
+  const wrapper = input?.closest?.(".upload-dropzone");
+  if (!wrapper) return null;
+  return {
+    wrapper,
+    info: wrapper.querySelector(".upload-file-info"),
+    name: wrapper.querySelector(".file-name"),
+    remove: wrapper.querySelector(".upload-remove")
+  };
+}
+
+function setUploadUI(input, file) {
+  const ui = getUploadUI(input);
+  if (!ui) return;
+  if (file) {
+    ui.wrapper.classList.add("has-file");
+    if (ui.info) ui.info.classList.remove("hidden");
+    if (ui.name) ui.name.textContent = file.name;
+  } else {
+    ui.wrapper.classList.remove("has-file");
+    if (ui.info) ui.info.classList.add("hidden");
+    if (ui.name) ui.name.textContent = "Файл не выбран";
+  }
+}
+
+function clearFileState(type) {
+  state[type] = null;
+  if (type === "accruals") {
+    state.earliestAccrualDate = null;
+    state.otherServicesTypes = [];
+    state.otherServicesTypesSelected = new Set();
+    state.showOtherServices = false;
+    updateOtherServicesTypes();
+    renderOtherServicesFilter();
+    updateDateHint();
+  }
+  updateCalcAvailability();
+  updateStatus();
+}
+
 function onFileChange(type, schema, fallback) {
   return async (event) => {
     const file = event.target.files[0];
@@ -1507,6 +1547,7 @@ function onFileChange(type, schema, fallback) {
         state.showOtherServices = false;
         renderOtherServicesFilter();
       }
+      setUploadUI(event.target, file);
       updateStatus();
     } catch (error) {
       setStatus(`Ошибка: ${error.message}`, true);
@@ -1863,6 +1904,19 @@ async function init() {
     wrapper.addEventListener("drop", handleDrop);
   };
 
+  const setupUploadUI = (input, type) => {
+    if (!input) return;
+    const ui = getUploadUI(input);
+    if (!ui || !ui.remove) return;
+    ui.remove.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      input.value = "";
+      setUploadUI(input, null);
+      clearFileState(type);
+    });
+  };
+
   const attachFileHandler = (input, handler) => {
     input.addEventListener("change", handler);
     input.onchange = handler;
@@ -1922,6 +1976,10 @@ async function init() {
   setupDropzone(elements.ordersFile);
   setupDropzone(elements.pvpFile);
   setupDropzone(elements.stencilsFile);
+  setupUploadUI(elements.accrualsFile, "accruals");
+  setupUploadUI(elements.ordersFile, "orders");
+  setupUploadUI(elements.pvpFile, "pvp");
+  setupUploadUI(elements.stencilsFile, "stencils");
 
   if (elements.signInButton) {
     elements.signInButton.addEventListener("click", async () => {
