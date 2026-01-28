@@ -317,7 +317,39 @@ function pickBestHeaderRow(rows, schema) {
 
 function fixCyrillicMojibake(value) {
   if (typeof value !== "string" || value.length === 0) return value;
-  const bytes = Array.from(value, (ch) => ch.charCodeAt(0) & 0xff);
+  const bytes = Uint8Array.from(
+    Array.from(value, (ch) => ch.charCodeAt(0) & 0xff)
+  );
+  const countCyrillic = (text) => (text.match(/[А-Яа-яЁё]/g) || []).length;
+  const countReplacement = (text) => (text.match(/\uFFFD/g) || []).length;
+  const scoreText = (text) =>
+    countCyrillic(text) * 3 - countReplacement(text);
+
+  const tryDecoders = [];
+  if (typeof TextDecoder === "function") {
+    ["windows-1251", "ibm866", "koi8-r", "x-mac-cyrillic", "iso-8859-5"].forEach(
+      (encoding) => {
+        try {
+          const decoder = new TextDecoder(encoding, { fatal: false });
+          tryDecoders.push((data) => decoder.decode(data));
+        } catch (error) {
+          // ignore unsupported encodings
+        }
+      }
+    );
+  }
+
+  let bestText = value;
+  let bestScore = scoreText(value);
+  tryDecoders.forEach((decode) => {
+    const text = decode(bytes);
+    const score = scoreText(text);
+    if (score > bestScore) {
+      bestScore = score;
+      bestText = text;
+    }
+  });
+
   const cp1251Table = [
     0x0402, 0x0403, 0x201a, 0x0453, 0x201e, 0x2026, 0x2020, 0x2021,
     0x20ac, 0x2030, 0x0409, 0x2039, 0x040a, 0x040c, 0x040b, 0x040f,
@@ -336,19 +368,18 @@ function fixCyrillicMojibake(value) {
     0x0440, 0x0441, 0x0442, 0x0443, 0x0444, 0x0445, 0x0446, 0x0447,
     0x0448, 0x0449, 0x044a, 0x044b, 0x044c, 0x044d, 0x044e, 0x044f
   ];
-  const decoded = bytes
+  const decoded = Array.from(bytes)
     .map((byte) => {
       if (byte < 0x80) return String.fromCharCode(byte);
       const mapped = cp1251Table[byte - 0x80];
       return mapped ? String.fromCharCode(mapped) : "";
     })
     .join("");
-  const originalCount = (value.match(/[А-Яа-яЁё]/g) || []).length;
-  const decodedCount = (decoded.match(/[А-Яа-яЁё]/g) || []).length;
-  if (decodedCount > originalCount && decodedCount >= 2) {
-    return decoded;
+  if (scoreText(decoded) > bestScore) {
+    bestScore = scoreText(decoded);
+    bestText = decoded;
   }
-  return value;
+  return bestText;
 }
 
 function findColumnIndexByKeys(normalizedHeaders, keys) {
