@@ -1565,7 +1565,9 @@ function updateOwnerUI() {
   });
   elements.tabPanels.forEach((panel) => {
     if (panel.dataset.panel === "cashflow") {
-      panel.classList.toggle("hidden", !isOwner);
+      if (!isOwner) {
+        panel.classList.add("hidden");
+      }
     }
   });
   if (elements.cashflowSavePeriod) {
