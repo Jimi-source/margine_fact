@@ -101,7 +101,7 @@ const elements = {
   appContent: document.getElementById("appContent"),
   authGate: document.getElementById("authGate"),
   authState: document.getElementById("authState"),
-  creditsState: document.getElementById("creditsState"),
+  creditsPanelValue: document.getElementById("creditsPanelValue"),
   authStatus: document.getElementById("authStatus"),
   signInButton: document.getElementById("signInButton"),
   emailAuth: document.getElementById("emailAuth"),
@@ -662,7 +662,7 @@ function validateElements() {
   if (!elements.appContent) missing.push("appContent");
   if (!elements.authGate) missing.push("authGate");
   if (!elements.authState) missing.push("authState");
-  if (!elements.creditsState) missing.push("creditsState");
+  if (!elements.creditsPanelValue) missing.push("creditsPanelValue");
   if (!elements.authStatus) missing.push("authStatus");
   if (!elements.signInButton) missing.push("signInButton");
   if (!elements.emailAuth) missing.push("emailAuth");
@@ -1190,7 +1190,7 @@ async function createPaymentRemote(packId) {
   }
   const url = data.confirmationUrl;
   if (url) {
-    window.location.href = url;
+    window.open(url, "_blank", "noopener,noreferrer");
   } else {
     setBuyCreditsStatus("Не удалось получить ссылку оплаты.", true);
   }
@@ -1529,10 +1529,10 @@ function updateAuthUI(user) {
   if (elements.authState) {
     elements.authState.textContent = user ? user.email || "Вход выполнен" : "Гость";
   }
-  if (elements.creditsState) {
+  if (elements.creditsPanelValue) {
     const value =
       user && Number.isFinite(state.userCredits) ? formatInteger(state.userCredits) : "—";
-    elements.creditsState.textContent = `Кредиты: ${value}`;
+    elements.creditsPanelValue.textContent = value;
   }
   if (elements.signInButton) {
     elements.signInButton.disabled = Boolean(user);

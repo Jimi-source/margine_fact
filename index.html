@@ -52,13 +52,42 @@
           </div>
           <div class="auth-box">
             <div id="authState" class="muted">Гость</div>
-            <div id="creditsState" class="muted">Кредиты: —</div>
             <button type="button" id="signOutButton" class="ghost-button" disabled>
               Выйти
             </button>
           </div>
         </div>
       </header>
+
+      <section class="card credits-panel">
+        <div class="credits-panel-header">
+          <div>
+            <h2>Кредиты и оплата</h2>
+            <p class="muted">
+              1 кредит = 1 расчет отчёта. Кредиты списываются при каждом расчёте.
+            </p>
+          </div>
+          <div class="credits-panel-balance">
+            <div class="muted">Баланс</div>
+            <div id="creditsPanelValue" class="credits-value">—</div>
+          </div>
+        </div>
+        <div class="buy-credits-grid">
+          <button type="button" class="ghost-button buy-credits-button" data-pack="1">
+            1 кредит — 150 ₽
+          </button>
+          <button type="button" class="ghost-button buy-credits-button" data-pack="3">
+            3 кредита — 400 ₽
+          </button>
+          <button type="button" class="ghost-button buy-credits-button" data-pack="5">
+            5 кредитов — 650 ₽
+          </button>
+          <button type="button" class="ghost-button buy-credits-button" data-pack="10">
+            10 кредитов — 1 250 ₽
+          </button>
+        </div>
+        <div id="buyCreditsStatus" class="status"></div>
+      </section>
 
       <div class="tabs">
         <button type="button" class="tab-button active" data-tab="calc">
@@ -114,28 +143,6 @@
           Сохранить маржу периода
         </button>
         <div id="uploadStatus" class="status"></div>
-      </section>
-
-      <section class="card tab-panel" data-panel="calc">
-        <h2>Покупка кредитов</h2>
-        <p class="muted">
-          1 кредит = 1 отчет. Оплата через ЮKassa.
-        </p>
-        <div class="buy-credits-grid">
-          <button type="button" class="ghost-button buy-credits-button" data-pack="1">
-            1 кредит — 150 ₽
-          </button>
-          <button type="button" class="ghost-button buy-credits-button" data-pack="3">
-            3 кредита — 400 ₽
-          </button>
-          <button type="button" class="ghost-button buy-credits-button" data-pack="5">
-            5 кредитов — 650 ₽
-          </button>
-          <button type="button" class="ghost-button buy-credits-button" data-pack="10">
-            10 кредитов — 1 250 ₽
-          </button>
-        </div>
-        <div id="buyCreditsStatus" class="status"></div>
       </section>
 
       <section class="card tab-panel" data-panel="calc">
