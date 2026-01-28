@@ -256,6 +256,21 @@ label {
     transform 0.2s ease;
 }
 
+.upload-dropzone::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 20px;
+  height: 20px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/%3E%3Cpath d='M7 10l5-5 5 5'/%3E%3Cpath d='M12 5v14'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 20px 20px;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
 .upload-dropzone input[type="file"] {
   position: absolute;
   inset: 0;
@@ -274,12 +289,25 @@ label {
   border-color: rgba(79, 70, 229, 0.4);
   background: var(--primary-soft);
   box-shadow: var(--shadow-sm);
+  animation: dropzone-pulse 1.2s ease-in-out infinite;
 }
 
 .upload-dropzone:hover {
   border-color: rgba(79, 70, 229, 0.3);
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
+}
+
+@keyframes dropzone-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.22);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(79, 70, 229, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0);
+  }
 }
 
 input[type="date"],
