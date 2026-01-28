@@ -305,11 +305,11 @@ select:focus {
 }
 
 .other-services-filter {
-  margin-bottom: 16px;
+  margin-top: 16px;
   padding: 12px 14px;
   border-radius: 12px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: rgba(76, 111, 255, 0.08);
+  border: 1px solid rgba(76, 111, 255, 0.4);
 }
 
 .filter-title {
@@ -319,17 +319,18 @@ select:focus {
 }
 
 .filter-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-start;
+  display: grid;
+  gap: 8px 16px;
+  align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .filter-list label {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 500;
+  font-weight: 600;
+  color: var(--text);
 }
 
 .cashflow-actions {
