@@ -1708,7 +1708,9 @@ function renderTable(rows) {
   const groups = Array.isArray(state.accrualGroups) ? state.accrualGroups : [];
   const head = elements.resultTable?.querySelector("thead");
   if (head) {
-    const groupHeaders = groups.map((group) => `<th>${group}</th>`).join("");
+    const groupHeaders = groups
+      .map((group) => `<th>Начисления — ${group}</th>`)
+      .join("");
     head.innerHTML = `
       <tr>
         <th>Артикул</th>
