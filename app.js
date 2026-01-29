@@ -78,6 +78,7 @@ const state = {
   sebesDirty: false,
   otherServicesTypes: [],
   otherServicesTypesSelected: new Set(),
+  accrualGroups: [],
   lastSummary: null,
   lastCalcRange: null,
   cashflow: {
@@ -102,6 +103,7 @@ const elements = {
   dateHint: document.getElementById("dateHint"),
   uploadStatus: document.getElementById("uploadStatus"),
   resultSummary: document.getElementById("resultSummary"),
+  resultTable: document.getElementById("resultTable"),
   resultBody: document.getElementById("resultBody"),
   missingCostBlock: document.getElementById("missingCostBlock"),
   appContent: document.getElementById("appContent"),
@@ -1411,6 +1413,7 @@ async function calculateRemote() {
   const summary = data.summary;
   const rows = data.rows || [];
   const missingCosts = data.missingCosts || [];
+  state.accrualGroups = Array.isArray(data.accrualGroups) ? data.accrualGroups : [];
   state.lastSummary = summary;
   state.lastCalcRange = { start: state.startDate, end: state.endDate };
   renderSummary(summary);
@@ -1702,22 +1705,55 @@ function renderSummary(values) {
 }
 
 function renderTable(rows) {
-  elements.resultBody.innerHTML = rows
-    .map(
-      (row) => `
+  const groups = Array.isArray(state.accrualGroups) ? state.accrualGroups : [];
+  const head = elements.resultTable?.querySelector("thead");
+  if (head) {
+    const groupHeaders = groups.map((group) => `<th>${group}</th>`).join("");
+    head.innerHTML = `
       <tr>
-        <td>${row.article}</td>
-        <td>${formatNumber(row.cost)}</td>
-        <td>${formatInteger(row.qty)}</td>
-        <td>${formatNumber(row.costSum)}</td>
-        <td>${formatNumber(row.otherPerArticle)}</td>
-        <td>${formatNumber(row.ads)}</td>
-        <td>${formatNumber(row.accrual)}</td>
-        <td>${formatNumber(row.revenue)}</td>
-        <td>${formatPercent(row.margin)}</td>
+        <th>Артикул</th>
+        ${groupHeaders}
+        <th>Себес</th>
+        <th>Кол-во доставлено</th>
+        <th>Сумма себестоимости</th>
+        <th>Прочие услуги</th>
+        <th>Реклама</th>
+        <th>Выручка</th>
+        <th>Маржа</th>
       </tr>
-    `
-    )
+    `;
+  }
+  const columnCount = 1 + groups.length + 8;
+  if (!rows || rows.length === 0) {
+    elements.resultBody.innerHTML = `
+      <tr>
+        <td colspan="${columnCount}" class="muted">
+          Нет данных для отображения.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+  elements.resultBody.innerHTML = rows
+    .map((row) => {
+      const byGroup = row.accrualByGroup || {};
+      const groupCells = groups
+        .map((group) => `<td>${formatNumber(byGroup[group] || 0)}</td>`)
+        .join("");
+      return `
+        <tr>
+          <td>${row.article}</td>
+          ${groupCells}
+          <td>${formatNumber(row.cost)}</td>
+          <td>${formatInteger(row.qty)}</td>
+          <td>${formatNumber(row.costSum)}</td>
+          <td>${formatNumber(row.otherPerArticle)}</td>
+          <td>${formatNumber(row.ads)}</td>
+          <td>${formatNumber(row.revenue)}</td>
+          <td>${formatPercent(row.margin)}</td>
+        </tr>
+      `;
+    })
     .join("");
 }
 
