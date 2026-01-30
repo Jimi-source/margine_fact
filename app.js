@@ -52,7 +52,7 @@ if (XLSXLib && window.cptable && typeof XLSXLib.set_cptable === "function") {
   XLSXLib.set_cptable(window.cptable);
 }
 
-const FUNCTIONS_BASE_URL = "https://us-central1-marginefact.cloudfunctions.net";
+const FUNCTIONS_BASE_URL = "https://31.130.130.129";
 
 const SEBES = [];
 
