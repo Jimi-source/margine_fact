@@ -2174,8 +2174,11 @@ async function init() {
   const setupDatePicker = (input) => {
     if (!input) return;
     const showPicker = () => {
-      if (typeof input.showPicker === "function") {
+      if (typeof input.showPicker !== "function") return;
+      try {
         input.showPicker();
+      } catch (error) {
+        // Safari throws if it doesn't consider this a user gesture.
       }
     };
     input.addEventListener("click", showPicker);
