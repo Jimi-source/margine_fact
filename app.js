@@ -52,8 +52,7 @@ if (XLSXLib && window.cptable && typeof XLSXLib.set_cptable === "function") {
   XLSXLib.set_cptable(window.cptable);
 }
 
-const FUNCTIONS_BASE_URL =
-  "https://champions-specs-match-mediterranean.trycloudflare.com";
+const FUNCTIONS_BASE_URL = "https://6289319-cz09105.twc1.net";
 
 const SEBES = [];
 
