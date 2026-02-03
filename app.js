@@ -1,21 +1,3 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-import {
-  getAuth,
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  signOut
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-import {
-  doc,
-  getDoc,
-  getFirestore,
-  setDoc
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-
 window.__APP_READY = false;
 function reportInitError(message) {
   const el = document.getElementById("authStatus");
@@ -34,18 +16,12 @@ window.addEventListener("unhandledrejection", (event) => {
   reportInitError(reason);
 });
 
-const firebaseConfig = {
-  apiKey: "AIzaSyCAlv2Wqzyy89Hp5sOYUBpuTNieqMIjF74",
-  authDomain: "marginefact.firebaseapp.com",
-  projectId: "marginefact",
-  storageBucket: "marginefact.firebasestorage.app",
-  messagingSenderId: "295108927428",
-  appId: "1:295108927428:web:1cc3b31ad0a58132d7ce91"
+const STORAGE_KEYS = {
+  authToken: "mf_auth_token",
+  authEmail: "mf_auth_email",
+  sebes: "mf_sebes",
+  cashflow: "mf_cashflow"
 };
-
-const firebaseApp = initializeApp(firebaseConfig);
-const auth = getAuth(firebaseApp);
-const db = getFirestore(firebaseApp);
 
 const XLSXLib = window.XLSX;
 if (XLSXLib && window.cptable && typeof XLSXLib.set_cptable === "function") {
@@ -72,6 +48,7 @@ const state = {
   sebes: [],
   earliestAccrualDate: null,
   user: null,
+  authToken: "",
   userCredits: null,
   userRole: null,
   showOtherServices: false,
@@ -111,7 +88,6 @@ const elements = {
   authState: document.getElementById("authState"),
   creditsPanelValue: document.getElementById("creditsPanelValue"),
   authStatus: document.getElementById("authStatus"),
-  signInButton: document.getElementById("signInButton"),
   emailAuth: document.getElementById("emailAuth"),
   passwordAuth: document.getElementById("passwordAuth"),
   emailSignIn: document.getElementById("emailSignIn"),
@@ -199,6 +175,51 @@ function setAuthStatus(message, isError = false) {
   elements.authStatus.classList.toggle("error", isError);
 }
 
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getStoredAuthToken() {
+  return state.authToken || localStorage.getItem(STORAGE_KEYS.authToken) || "";
+}
+
+function storeAuthSession(email, token) {
+  const normalizedEmail = normalizeEmail(email);
+  state.user = normalizedEmail ? { email: normalizedEmail } : null;
+  state.authToken = token || "";
+  if (normalizedEmail) {
+    localStorage.setItem(STORAGE_KEYS.authEmail, normalizedEmail);
+  }
+  if (token) {
+    localStorage.setItem(STORAGE_KEYS.authToken, token);
+  }
+}
+
+function clearAuthSession() {
+  state.user = null;
+  state.authToken = "";
+  localStorage.removeItem(STORAGE_KEYS.authEmail);
+  localStorage.removeItem(STORAGE_KEYS.authToken);
+}
+
+function restoreAuthSession() {
+  const email = normalizeEmail(localStorage.getItem(STORAGE_KEYS.authEmail));
+  const token = localStorage.getItem(STORAGE_KEYS.authToken) || "";
+  if (!email || !token) {
+    clearAuthSession();
+    return false;
+  }
+  state.user = { email };
+  state.authToken = token;
+  return true;
+}
+
+function getUserStorageKey(prefix) {
+  const email = state.user && state.user.email ? normalizeEmail(state.user.email) : "";
+  if (!email) return `${prefix}_guest`;
+  return `${prefix}_${encodeURIComponent(email)}`;
+}
+
 function setMissingCostBlock(articles) {
   if (!elements.missingCostBlock) return;
   if (!articles || articles.length === 0) {
@@ -212,17 +233,12 @@ function setMissingCostBlock(articles) {
 }
 
 function mapAuthError(error) {
-  const code = error && error.code ? String(error.code) : "";
-  if (code === "auth/unauthorized-domain") {
-    return "Домен не разрешён в Firebase Auth (Authorized domains).";
-  }
-  if (code === "auth/operation-not-allowed") {
-    return "В Firebase Auth не включён провайдер Google.";
-  }
-  if (code === "auth/invalid-credential") {
+  const message = error && error.message ? String(error.message) : "";
+  if (!message) return "Не удалось выполнить вход. Попробуйте ещё раз.";
+  if (message.toLowerCase().includes("invalid")) {
     return "Некорректные данные входа. Попробуйте ещё раз.";
   }
-  return `Не удалось выполнить вход. (${code || "unknown-error"})`;
+  return `Не удалось выполнить вход. (${message})`;
 }
 
 function setActiveTab(tabName) {
@@ -923,7 +939,6 @@ function validateElements() {
   if (!elements.authState) missing.push("authState");
   if (!elements.creditsPanelValue) missing.push("creditsPanelValue");
   if (!elements.authStatus) missing.push("authStatus");
-  if (!elements.signInButton) missing.push("signInButton");
   if (!elements.emailAuth) missing.push("emailAuth");
   if (!elements.passwordAuth) missing.push("passwordAuth");
   if (!elements.emailSignIn) missing.push("emailSignIn");
@@ -1199,8 +1214,8 @@ function formatInputValue(value) {
 
 async function persistCashflowEntries() {
   if (!state.user) return;
-  const ref = doc(db, "users", state.user.uid, "cashflow", String(state.cashflow.year));
-  await setDoc(ref, { entries: state.cashflow.entries }, { merge: true });
+  const storageKey = `${getUserStorageKey(STORAGE_KEYS.cashflow)}_${state.cashflow.year}`;
+  localStorage.setItem(storageKey, JSON.stringify(state.cashflow.entries));
 }
 
 function scheduleCashflowSave(message) {
@@ -1379,7 +1394,10 @@ function renderCashflowTable() {
 }
 
 async function calculateRemote() {
-  const token = await state.user.getIdToken();
+  const token = getStoredAuthToken();
+  if (!token) {
+    throw new Error("Нужно войти в аккаунт.");
+  }
   const payload = {
     startDate: toISODate(state.startDate),
     endDate: toISODate(state.endDate),
@@ -1442,7 +1460,8 @@ async function calculateRemote() {
 
 async function initUserRemote() {
   if (!state.user) return null;
-  const token = await state.user.getIdToken();
+  const token = getStoredAuthToken();
+  if (!token) return null;
   const response = await fetch(`${FUNCTIONS_BASE_URL}/initUser`, {
     method: "POST",
     headers: {
@@ -1465,7 +1484,11 @@ async function createPaymentRemote(packId) {
     return;
   }
   setBuyCreditsStatus("Перенаправляю на оплату…");
-  const token = await state.user.getIdToken();
+  const token = getStoredAuthToken();
+  if (!token) {
+    setBuyCreditsStatus("Нужно войти в аккаунт.", true);
+    return;
+  }
   const response = await fetch(`${FUNCTIONS_BASE_URL}/createPayment`, {
     method: "POST",
     headers: {
@@ -1541,9 +1564,13 @@ async function loadCashflow(year) {
     return;
   }
   try {
-    const ref = doc(db, "users", state.user.uid, "cashflow", String(year));
-    const snapshot = await getDoc(ref);
-    state.cashflow.entries = snapshot.exists() ? snapshot.data().entries || {} : {};
+    const storageKey = `${getUserStorageKey(STORAGE_KEYS.cashflow)}_${year}`;
+    const raw = localStorage.getItem(storageKey);
+    try {
+      state.cashflow.entries = raw ? JSON.parse(raw) : {};
+    } catch (error) {
+      state.cashflow.entries = {};
+    }
     renderCashflowTable();
     updateCashflowActions();
   } catch (error) {
@@ -1956,6 +1983,33 @@ function closeSignUpModal() {
   if (elements.signUpPasswordRepeat) elements.signUpPasswordRepeat.value = "";
 }
 
+async function authRequest(path, payload) {
+  const response = await fetch(`${FUNCTIONS_BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {})
+  });
+  const data = await response.json();
+  if (!response.ok || !data || !data.ok) {
+    const errorMessage = data && data.error ? data.error : "Ошибка сервера.";
+    throw new Error(errorMessage);
+  }
+  return data;
+}
+
+async function handleAuthSuccess(email, token) {
+  storeAuthSession(email, token);
+  updateAuthUI(state.user);
+  await loadUserSebes(state.user);
+  await loadUserCredits(state.user);
+  renderSebesTable(state.sebes);
+  updateSebesActions();
+  await loadCashflow(state.cashflow.year);
+  renderCashflowTable();
+  updateCashflowActions();
+  setAuthStatus("");
+}
+
 async function loadUserCredits(user) {
   if (!user) {
     state.userCredits = null;
@@ -1969,12 +2023,9 @@ async function loadUserCredits(user) {
     state.userCredits = Number.isFinite(credits) ? credits : 0;
     state.userRole = result && result.role ? String(result.role) : null;
   } catch (error) {
-    const ref = doc(db, "users", user.uid);
-    const snapshot = await getDoc(ref);
-    const data = snapshot.exists() ? snapshot.data() || {} : {};
-    const credits = Number(data.credits || 0);
-    state.userCredits = Number.isFinite(credits) ? credits : 0;
-    state.userRole = data.role ? String(data.role) : null;
+    state.userCredits = 0;
+    state.userRole = null;
+    setAuthStatus(mapAuthError(error), true);
   }
   updateOwnerUI();
   updateAuthUI(user);
@@ -1989,9 +2040,14 @@ async function loadUserSebes(user) {
     setSebesStatus("Войдите, чтобы редактировать себестоимость.");
     return;
   }
-  const ref = doc(db, "users", user.uid, "settings", "sebes");
-  const snapshot = await getDoc(ref);
-  const items = snapshot.exists() ? snapshot.data().items || [] : [];
+  const storageKey = getUserStorageKey(STORAGE_KEYS.sebes);
+  const raw = localStorage.getItem(storageKey);
+  let items = [];
+  try {
+    items = raw ? JSON.parse(raw) : [];
+  } catch (error) {
+    items = [];
+  }
   state.sebes = items.length > 0 ? items : [];
   state.sebesDirty = false;
   renderSebesTable(state.sebes);
@@ -2005,8 +2061,8 @@ async function saveUserSebes() {
     return;
   }
   const items = getSebesFromUI();
-  const ref = doc(db, "users", state.user.uid, "settings", "sebes");
-  await setDoc(ref, { items, updatedAt: new Date().toISOString() });
+  const storageKey = getUserStorageKey(STORAGE_KEYS.sebes);
+  localStorage.setItem(storageKey, JSON.stringify(items));
   state.sebes = items;
   state.sebesDirty = false;
   updateSebesActions();
@@ -2293,36 +2349,6 @@ async function init() {
   setupUploadUI(elements.pvpFile, "pvp");
   setupUploadUI(elements.stencilsFile, "stencils");
 
-  if (elements.signInButton) {
-    elements.signInButton.addEventListener("click", async () => {
-      const provider = new GoogleAuthProvider();
-      try {
-        setAuthStatus("Открываю окно входа…");
-        const result = await signInWithPopup(auth, provider);
-        state.user = result.user || null;
-        updateAuthUI(state.user);
-        await loadUserSebes(state.user);
-        await loadUserCredits(state.user);
-        renderSebesTable(state.sebes);
-        updateSebesActions();
-        await loadCashflow(state.cashflow.year);
-        renderCashflowTable();
-        updateCashflowActions();
-        setAuthStatus("");
-      } catch (error) {
-        const code = error && error.code ? String(error.code) : "";
-        if (code === "auth/popup-blocked") {
-          setAuthStatus("Разрешите всплывающие окна для входа.", true);
-          return;
-        }
-        if (code === "auth/popup-closed-by-user") {
-          setAuthStatus("Вход отменён пользователем.", true);
-          return;
-        }
-        setAuthStatus(mapAuthError(error), true);
-      }
-    });
-  }
   if (elements.emailSignIn) {
     elements.emailSignIn.addEventListener("click", async () => {
       const email = elements.emailAuth ? elements.emailAuth.value.trim() : "";
@@ -2333,8 +2359,8 @@ async function init() {
       }
       try {
         setAuthStatus("Выполняю вход…");
-        await signInWithEmailAndPassword(auth, email, password);
-        setAuthStatus("");
+        const data = await authRequest("/auth/login", { email, password });
+        await handleAuthSuccess(email, data.token);
       } catch (error) {
         setAuthStatus(mapAuthError(error), true);
       }
@@ -2377,8 +2403,8 @@ async function init() {
       }
       try {
         setAuthStatus("Создаю аккаунт…");
-        await createUserWithEmailAndPassword(auth, email, password);
-        setAuthStatus("");
+        const data = await authRequest("/auth/register", { email, password });
+        await handleAuthSuccess(email, data.token);
         closeSignUpModal();
       } catch (error) {
         setAuthStatus(mapAuthError(error), true);
@@ -2387,36 +2413,26 @@ async function init() {
   }
   if (elements.emailReset) {
     elements.emailReset.addEventListener("click", async () => {
-      const email = elements.emailAuth ? elements.emailAuth.value.trim() : "";
-      if (!email) {
-        setAuthStatus("Введите email для восстановления.", true);
-        return;
-      }
-      try {
-        setAuthStatus("Отправляю письмо для восстановления…");
-        await sendPasswordResetEmail(auth, email);
-        setAuthStatus("Письмо для восстановления отправлено.");
-      } catch (error) {
-        setAuthStatus(mapAuthError(error), true);
-      }
+      setAuthStatus("Сброс пароля временно недоступен.", true);
     });
   }
   if (elements.signOutButton) {
     elements.signOutButton.addEventListener("click", async () => {
-      try {
-        await signOut(auth);
-      } catch (error) {
-        setSebesStatus("Ошибка выхода. Попробуйте снова.", true);
-      }
+      clearAuthSession();
+      updateAuthUI(null);
+      await loadUserSebes(null);
+      await loadUserCredits(null);
+      renderSebesTable(state.sebes);
+      updateSebesActions();
+      await loadCashflow(state.cashflow.year);
+      renderCashflowTable();
+      updateCashflowActions();
     });
   }
 
-  onAuthStateChanged(auth, async (user) => {
-    state.user = user || null;
-    updateAuthUI(state.user);
-    if (state.user) {
-      setAuthStatus("");
-    }
+  const hasSession = restoreAuthSession();
+  updateAuthUI(state.user);
+  if (hasSession) {
     await loadUserSebes(state.user);
     await loadUserCredits(state.user);
     renderSebesTable(state.sebes);
@@ -2424,9 +2440,10 @@ async function init() {
     await loadCashflow(state.cashflow.year);
     renderCashflowTable();
     updateCashflowActions();
-  });
-
-  setAuthStatus("Готово к входу.");
+    setAuthStatus("");
+  } else {
+    setAuthStatus("Готово к входу.");
+  }
   window.__APP_READY = true;
 
 }
