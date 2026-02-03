@@ -147,6 +147,23 @@ function normalizeKey(value) {
     .replace(/[^a-z0-9а-яё]/gi, "");
 }
 
+const GROUP_LABELS = {
+  "Возвраты": "Возвраты",
+  "Вознаграждение Ozon": "Вознаграждение Ozon",
+  "Продажи": "Продажи",
+  "Продвижение и реклама": "Продвижение и реклама",
+  "Услуги агентов": "Услуги агентов",
+  "Услуги доставки": "Услуги доставки"
+};
+
+function getGroupLabel(group) {
+  return GROUP_LABELS[group] || `Начисления — ${group}`;
+}
+
+function getSalesValue(byGroup) {
+  return Number(byGroup && byGroup["Продажи"] ? byGroup["Продажи"] : 0);
+}
+
 function normalizeArticle(value) {
   return String(value || "").trim();
 }
@@ -967,7 +984,7 @@ function updateStatus() {
 
 function updateDateHint() {
   if (state.earliestAccrualDate && state.endDate) {
-    elements.dateHint.textContent = `Запросите отчеты Заказы/ПВП/Трафареты за период ${formatDate(
+    elements.dateHint.textContent = `Запросите отчеты Заказы/Оплата за заказ/Оплата за клик за период ${formatDate(
       state.earliestAccrualDate
     )} – ${formatDate(state.endDate)}.`;
     return;
@@ -1500,8 +1517,14 @@ async function calculateRemote() {
   const summary = data.summary;
   const rows = data.rows || [];
   const missingCosts = data.missingCosts || [];
+  const totalSales = rows.reduce((sum, row) => {
+    const byGroup = row.accrualByGroup || {};
+    return sum + getSalesValue(byGroup);
+  }, 0);
+  const marginByRealiz =
+    totalSales > 0 ? (Number(summary.revenueBeforeTax || 0) - Number(summary.totalCost || 0)) / totalSales : 0;
   state.accrualGroups = Array.isArray(data.accrualGroups) ? data.accrualGroups : [];
-  state.lastSummary = summary;
+  state.lastSummary = { ...summary, totalSales, marginByRealiz };
   state.lastRows = rows;
   state.lastCalcRange = { start: state.startDate, end: state.endDate };
   renderSummary(summary);
@@ -1795,7 +1818,8 @@ function renderSummary(values) {
       <div>Выручка: ${formatNumber(values.revenueBeforeTax)}</div>
       <div>Себес: ${formatNumber(values.totalCost)}</div>
       <div>Прочие: ${formatNumber(values.otherServicesTotal)}</div>
-      <div>Маржа: ${formatPercent(values.marginBeforeTax)}</div>
+      <div>Маржа по начислениям: ${formatPercent(values.marginBeforeTax)}</div>
+      <div>Маржа по реализации: ${formatPercent(values.marginByRealiz)}</div>
     </div>
   `;
 }
@@ -1810,34 +1834,43 @@ function downloadReportExcel() {
     return;
   }
   const groups = Array.isArray(state.accrualGroups) ? state.accrualGroups : [];
+  const otherGroups = groups.filter((group) => group !== "Продажи");
   const rows = state.lastRows.map((row) => {
     const accrualByGroup = row.accrualByGroup || {};
+    const salesValue = getSalesValue(accrualByGroup);
+    const marginByRealiz =
+      salesValue > 0 ? (Number(row.revenue || 0) - Number(row.costSum || 0)) / salesValue : 0;
     const result = {
       "Артикул": row.article || "",
       "Себес": Number(row.cost || 0),
       "Кол-во доставлено": Number(row.qty || 0),
+      "Продажи": Number(salesValue || 0),
       "Сумма себестоимости": Number(row.costSum || 0),
       "Прочие услуги": Number(row.otherPerArticle || 0),
       "Реклама": Number(row.ads || 0),
       "Начисления": Number(row.accrual || 0),
       "Выручка": Number(row.revenue || 0),
-      "Маржа": Number(row.margin || 0)
+      "Маржа по начислениям": Number(row.margin || 0),
+      "Маржа по реализации": Number(marginByRealiz || 0)
     };
-    groups.forEach((group) => {
-      result[`Начисления — ${group}`] = Number(accrualByGroup[group] || 0);
+    otherGroups.forEach((group) => {
+      result[getGroupLabel(group)] = Number(accrualByGroup[group] || 0);
     });
     const ordered = { "Артикул": result["Артикул"] };
-    groups.forEach((group) => {
-      ordered[`Начисления — ${group}`] = result[`Начисления — ${group}`];
-    });
     ordered["Себес"] = result["Себес"];
     ordered["Кол-во доставлено"] = result["Кол-во доставлено"];
+    ordered["Продажи"] = result["Продажи"];
+    otherGroups.forEach((group) => {
+      const label = getGroupLabel(group);
+      ordered[label] = result[label];
+    });
     ordered["Сумма себестоимости"] = result["Сумма себестоимости"];
     ordered["Прочие услуги"] = result["Прочие услуги"];
     ordered["Реклама"] = result["Реклама"];
     ordered["Начисления"] = result["Начисления"];
     ordered["Выручка"] = result["Выручка"];
-    ordered["Маржа"] = result["Маржа"];
+    ordered["Маржа по начислениям"] = result["Маржа по начислениям"];
+    ordered["Маржа по реализации"] = result["Маржа по реализации"];
     return ordered;
   });
 
@@ -1846,7 +1879,14 @@ function downloadReportExcel() {
         { "Показатель": "Выручка", "Значение": Number(state.lastSummary.revenueBeforeTax || 0) },
         { "Показатель": "Себес", "Значение": Number(state.lastSummary.totalCost || 0) },
         { "Показатель": "Прочие", "Значение": Number(state.lastSummary.otherServicesTotal || 0) },
-        { "Показатель": "Маржа", "Значение": Number(state.lastSummary.marginBeforeTax || 0) }
+        {
+          "Показатель": "Маржа по начислениям",
+          "Значение": Number(state.lastSummary.marginBeforeTax || 0)
+        },
+        {
+          "Показатель": "Маржа по реализации",
+          "Значение": Number(state.lastSummary.marginByRealiz || 0)
+        }
       ]
     : [];
 
@@ -1865,26 +1905,30 @@ function downloadReportExcel() {
 
 function renderTable(rows) {
   const groups = Array.isArray(state.accrualGroups) ? state.accrualGroups : [];
+  const otherGroups = groups.filter((group) => group !== "Продажи");
   const head = elements.resultTable?.querySelector("thead");
   if (head) {
-    const groupHeaders = groups
-      .map((group) => `<th>Начисления — ${group}</th>`)
+    const groupHeaders = otherGroups
+      .map((group) => `<th>${getGroupLabel(group)}</th>`)
       .join("");
     head.innerHTML = `
       <tr>
         <th>Артикул</th>
-        ${groupHeaders}
         <th>Себес</th>
         <th>Кол-во доставлено</th>
+        <th>Продажи</th>
+        ${groupHeaders}
         <th>Сумма себестоимости</th>
         <th>Прочие услуги</th>
         <th>Реклама</th>
+        <th>Начисления</th>
         <th>Выручка</th>
-        <th>Маржа</th>
+        <th>Маржа по начислениям</th>
+        <th>Маржа по реализации</th>
       </tr>
     `;
   }
-  const columnCount = 1 + groups.length + 8;
+  const columnCount = 11 + otherGroups.length;
   if (!rows || rows.length === 0) {
     elements.resultBody.innerHTML = `
       <tr>
@@ -1898,20 +1942,26 @@ function renderTable(rows) {
   elements.resultBody.innerHTML = rows
     .map((row) => {
       const byGroup = row.accrualByGroup || {};
-      const groupCells = groups
+      const groupCells = otherGroups
         .map((group) => `<td>${formatNumber(byGroup[group] || 0)}</td>`)
         .join("");
+      const salesValue = getSalesValue(byGroup);
+      const marginByRealiz =
+        salesValue > 0 ? (Number(row.revenue || 0) - Number(row.costSum || 0)) / salesValue : 0;
       return `
         <tr>
           <td>${row.article}</td>
-          ${groupCells}
           <td>${formatNumber(row.cost)}</td>
           <td>${formatInteger(row.qty)}</td>
+          <td>${formatNumber(salesValue)}</td>
+          ${groupCells}
           <td>${formatNumber(row.costSum)}</td>
           <td>${formatNumber(row.otherPerArticle)}</td>
           <td>${formatNumber(row.ads)}</td>
+          <td>${formatNumber(row.accrual)}</td>
           <td>${formatNumber(row.revenue)}</td>
           <td>${formatPercent(row.margin)}</td>
+          <td>${formatPercent(marginByRealiz)}</td>
         </tr>
       `;
     })
@@ -1935,7 +1985,8 @@ function getUploadUI(input) {
     wrapper,
     info: wrapper.querySelector(".upload-file-info"),
     name: wrapper.querySelector(".file-name"),
-    remove: wrapper.querySelector(".upload-remove")
+    remove: wrapper.querySelector(".upload-remove"),
+    hint: wrapper.querySelector(".upload-hint")
   };
 }
 
@@ -1946,10 +1997,17 @@ function setUploadUI(input, file) {
     ui.wrapper.classList.add("has-file");
     if (ui.info) ui.info.classList.remove("hidden");
     if (ui.name) ui.name.textContent = file.name;
+    if (ui.hint) ui.hint.classList.add("hidden");
+    if (ui.remove) ui.remove.classList.remove("hidden");
   } else {
     ui.wrapper.classList.remove("has-file");
     if (ui.info) ui.info.classList.add("hidden");
     if (ui.name) ui.name.textContent = "Файл не выбран";
+    if (ui.hint) {
+      ui.hint.textContent = "Загрузите или перетяните отчет в это поле";
+      ui.hint.classList.remove("hidden");
+    }
+    if (ui.remove) ui.remove.classList.add("hidden");
   }
 }
 
@@ -2436,6 +2494,7 @@ async function init() {
     if (!input) return;
     const ui = getUploadUI(input);
     if (!ui || !ui.remove) return;
+    setUploadUI(input, null);
     ui.remove.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
