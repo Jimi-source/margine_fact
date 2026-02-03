@@ -241,6 +241,28 @@ function mapAuthError(error) {
   return `Не удалось выполнить вход. (${message})`;
 }
 
+async function apiRequest(path, { method = "GET", body } = {}) {
+  const token = getStoredAuthToken();
+  if (!token) {
+    throw new Error("Нужно войти в аккаунт.");
+  }
+  const headers = { Authorization: `Bearer ${token}` };
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+  const response = await fetch(`${FUNCTIONS_BASE_URL}${path}`, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined
+  });
+  const data = await response.json();
+  if (!response.ok || !data || !data.ok) {
+    const errorMessage = data && data.error ? data.error : "Ошибка сервера.";
+    throw new Error(errorMessage);
+  }
+  return data;
+}
+
 function setActiveTab(tabName) {
   elements.tabButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.tab === tabName);
@@ -1214,8 +1236,14 @@ function formatInputValue(value) {
 
 async function persistCashflowEntries() {
   if (!state.user) return;
-  const storageKey = `${getUserStorageKey(STORAGE_KEYS.cashflow)}_${state.cashflow.year}`;
-  localStorage.setItem(storageKey, JSON.stringify(state.cashflow.entries));
+  await apiRequest("/cashflow", {
+    method: "POST",
+    body: {
+      year: state.cashflow.year,
+      entries: state.cashflow.entries,
+      taxRate: state.cashflow.taxRate
+    }
+  });
 }
 
 function scheduleCashflowSave(message) {
@@ -1564,12 +1592,10 @@ async function loadCashflow(year) {
     return;
   }
   try {
-    const storageKey = `${getUserStorageKey(STORAGE_KEYS.cashflow)}_${year}`;
-    const raw = localStorage.getItem(storageKey);
-    try {
-      state.cashflow.entries = raw ? JSON.parse(raw) : {};
-    } catch (error) {
-      state.cashflow.entries = {};
+    const data = await apiRequest(`/cashflow?year=${encodeURIComponent(year)}`);
+    state.cashflow.entries = data.entries && typeof data.entries === "object" ? data.entries : {};
+    if (Number.isFinite(data.taxRate)) {
+      state.cashflow.taxRate = data.taxRate;
     }
     renderCashflowTable();
     updateCashflowActions();
@@ -2040,19 +2066,21 @@ async function loadUserSebes(user) {
     setSebesStatus("Войдите, чтобы редактировать себестоимость.");
     return;
   }
-  const storageKey = getUserStorageKey(STORAGE_KEYS.sebes);
-  const raw = localStorage.getItem(storageKey);
-  let items = [];
   try {
-    items = raw ? JSON.parse(raw) : [];
+    const data = await apiRequest("/sebes");
+    const items = Array.isArray(data.items) ? data.items : [];
+    state.sebes = items.length > 0 ? items : [];
+    state.sebesDirty = false;
+    renderSebesTable(state.sebes);
+    updateSebesActions();
+    setSebesStatus(items.length > 0 ? "Данные загружены." : "Нет сохранённых данных.");
   } catch (error) {
-    items = [];
+    state.sebes = [];
+    state.sebesDirty = false;
+    renderSebesTable(state.sebes);
+    updateSebesActions();
+    setSebesStatus("Не удалось загрузить себестоимость.", true);
   }
-  state.sebes = items.length > 0 ? items : [];
-  state.sebesDirty = false;
-  renderSebesTable(state.sebes);
-  updateSebesActions();
-  setSebesStatus(items.length > 0 ? "Данные загружены." : "Нет сохранённых данных.");
 }
 
 async function saveUserSebes() {
@@ -2061,12 +2089,15 @@ async function saveUserSebes() {
     return;
   }
   const items = getSebesFromUI();
-  const storageKey = getUserStorageKey(STORAGE_KEYS.sebes);
-  localStorage.setItem(storageKey, JSON.stringify(items));
-  state.sebes = items;
-  state.sebesDirty = false;
-  updateSebesActions();
-  setSebesStatus("Сохранено.");
+  try {
+    await apiRequest("/sebes", { method: "POST", body: { items } });
+    state.sebes = items;
+    state.sebesDirty = false;
+    updateSebesActions();
+    setSebesStatus("Сохранено.");
+  } catch (error) {
+    setSebesStatus("Не удалось сохранить себестоимость.", true);
+  }
 }
 
 function addSebesRow() {
@@ -2159,6 +2190,7 @@ async function init() {
       const value = parseNumber(elements.cashflowTaxRate.value);
       state.cashflow.taxRate = Number.isFinite(value) ? value : 0;
       renderCashflowTable();
+      scheduleCashflowSave("Кэшфлоу сохранен.");
     });
   }
   if (elements.cashflowSavePeriod) {
