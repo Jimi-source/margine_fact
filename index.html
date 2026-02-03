@@ -133,7 +133,7 @@
             </div>
           </label>
           <label class="upload-dropzone">
-            ПВП (необязательный)
+            Оплата за заказ (необязательный)
             <input type="file" id="pvpFile" accept=".xlsx,.xls" />
             <span class="upload-hint muted">Перетащите файл сюда или нажмите для выбора</span>
             <div class="upload-file-info hidden">
@@ -143,7 +143,7 @@
             </div>
           </label>
           <label class="upload-dropzone">
-            Трафареты (необязательный)
+            Оплата за клик (необязательный)
             <input type="file" id="stencilsFile" accept=".xlsx,.xls" />
             <span class="upload-hint muted">Перетащите файл сюда или нажмите для выбора</span>
             <div class="upload-file-info hidden">
@@ -162,6 +162,9 @@
       <section class="card tab-panel" data-panel="calc">
         <h2>3. Результат</h2>
         <div id="resultSummary" class="summary"></div>
+        <button type="button" id="downloadReport" class="ghost-button" disabled>
+          Скачать расчет (Excel)
+        </button>
         <div class="table-wrap">
           <table id="resultTable">
             <thead>

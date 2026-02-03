@@ -58,6 +58,7 @@ const state = {
   accrualGroups: [],
   lastSummary: null,
   lastCalcRange: null,
+  lastRows: [],
   cashflow: {
     year: new Date().getFullYear(),
     granularity: "week",
@@ -80,6 +81,7 @@ const elements = {
   dateHint: document.getElementById("dateHint"),
   uploadStatus: document.getElementById("uploadStatus"),
   resultSummary: document.getElementById("resultSummary"),
+  downloadReport: document.getElementById("downloadReport"),
   resultTable: document.getElementById("resultTable"),
   resultBody: document.getElementById("resultBody"),
   missingCostBlock: document.getElementById("missingCostBlock"),
@@ -145,6 +147,39 @@ function normalizeKey(value) {
     .replace(/[^a-z0-9а-яё]/gi, "");
 }
 
+function normalizeArticle(value) {
+  return String(value || "").trim();
+}
+
+function getSebesMap() {
+  const map = new Map();
+  (state.sebes || []).forEach((item) => {
+    const article = normalizeArticle(item && item.article);
+    if (!article) return;
+    const rawCost = item && item.cost;
+    if (rawCost === "" || rawCost === null || rawCost === undefined) return;
+    const cost = parseNumber(rawCost);
+    if (!Number.isFinite(cost)) return;
+    map.set(article, cost);
+  });
+  return map;
+}
+
+function getMissingSebesArticles() {
+  const sebesMap = getSebesMap();
+  const articles = new Set();
+  (state.orders || []).forEach((row) => {
+    const article = normalizeArticle(row && row["Артикул"]);
+    if (article) articles.add(article);
+  });
+  (state.accruals || []).forEach((row) => {
+    const article = normalizeArticle(row && row["Артикул"]);
+    if (article) articles.add(article);
+  });
+  const missing = Array.from(articles).filter((article) => !sebesMap.has(article));
+  return missing.sort();
+}
+
 function setStatus(message, isError = false) {
   if (!elements.uploadStatus) return;
   elements.uploadStatus.textContent = message;
@@ -173,6 +208,11 @@ function setAuthStatus(message, isError = false) {
   if (!elements.authStatus) return;
   elements.authStatus.textContent = message;
   elements.authStatus.classList.toggle("error", isError);
+}
+
+function updateDownloadAvailability() {
+  if (!elements.downloadReport) return;
+  elements.downloadReport.disabled = !(state.lastRows && state.lastRows.length > 0);
 }
 
 function normalizeEmail(value) {
@@ -956,6 +996,7 @@ function validateElements() {
   if (!elements.calcButton) missing.push("calcButton");
   if (!elements.uploadStatus) missing.push("uploadStatus");
   if (!elements.missingCostBlock) missing.push("missingCostBlock");
+  if (!elements.downloadReport) missing.push("downloadReport");
   if (!elements.appContent) missing.push("appContent");
   if (!elements.authGate) missing.push("authGate");
   if (!elements.authState) missing.push("authState");
@@ -1461,10 +1502,12 @@ async function calculateRemote() {
   const missingCosts = data.missingCosts || [];
   state.accrualGroups = Array.isArray(data.accrualGroups) ? data.accrualGroups : [];
   state.lastSummary = summary;
+  state.lastRows = rows;
   state.lastCalcRange = { start: state.startDate, end: state.endDate };
   renderSummary(summary);
   renderTable(rows);
   setMissingCostBlock(missingCosts);
+  updateDownloadAvailability();
   setStatus("Расчет выполнен.");
   updateCashflowActions();
   const matchedPeriod = state.cashflow.periods.find(
@@ -1757,6 +1800,69 @@ function renderSummary(values) {
   `;
 }
 
+function downloadReportExcel() {
+  if (!XLSXLib) {
+    setStatus("Ошибка: библиотека XLSX не загрузилась.", true);
+    return;
+  }
+  if (!state.lastRows || state.lastRows.length === 0) {
+    setStatus("Нет данных для выгрузки.", true);
+    return;
+  }
+  const groups = Array.isArray(state.accrualGroups) ? state.accrualGroups : [];
+  const rows = state.lastRows.map((row) => {
+    const accrualByGroup = row.accrualByGroup || {};
+    const result = {
+      "Артикул": row.article || "",
+      "Себес": Number(row.cost || 0),
+      "Кол-во доставлено": Number(row.qty || 0),
+      "Сумма себестоимости": Number(row.costSum || 0),
+      "Прочие услуги": Number(row.otherPerArticle || 0),
+      "Реклама": Number(row.ads || 0),
+      "Начисления": Number(row.accrual || 0),
+      "Выручка": Number(row.revenue || 0),
+      "Маржа": Number(row.margin || 0)
+    };
+    groups.forEach((group) => {
+      result[`Начисления — ${group}`] = Number(accrualByGroup[group] || 0);
+    });
+    const ordered = { "Артикул": result["Артикул"] };
+    groups.forEach((group) => {
+      ordered[`Начисления — ${group}`] = result[`Начисления — ${group}`];
+    });
+    ordered["Себес"] = result["Себес"];
+    ordered["Кол-во доставлено"] = result["Кол-во доставлено"];
+    ordered["Сумма себестоимости"] = result["Сумма себестоимости"];
+    ordered["Прочие услуги"] = result["Прочие услуги"];
+    ordered["Реклама"] = result["Реклама"];
+    ordered["Начисления"] = result["Начисления"];
+    ordered["Выручка"] = result["Выручка"];
+    ordered["Маржа"] = result["Маржа"];
+    return ordered;
+  });
+
+  const summaryRows = state.lastSummary
+    ? [
+        { "Показатель": "Выручка", "Значение": Number(state.lastSummary.revenueBeforeTax || 0) },
+        { "Показатель": "Себес", "Значение": Number(state.lastSummary.totalCost || 0) },
+        { "Показатель": "Прочие", "Значение": Number(state.lastSummary.otherServicesTotal || 0) },
+        { "Показатель": "Маржа", "Значение": Number(state.lastSummary.marginBeforeTax || 0) }
+      ]
+    : [];
+
+  const workbook = XLSXLib.utils.book_new();
+  const sheetRows = XLSXLib.utils.json_to_sheet(rows);
+  XLSXLib.utils.book_append_sheet(workbook, sheetRows, "Расчет");
+  if (summaryRows.length > 0) {
+    const sheetSummary = XLSXLib.utils.json_to_sheet(summaryRows);
+    XLSXLib.utils.book_append_sheet(workbook, sheetSummary, "Сводка");
+  }
+  const filename = `margin-report-${toISODate(state.startDate)}-${toISODate(
+    state.endDate
+  )}.xlsx`;
+  XLSXLib.writeFile(workbook, filename);
+}
+
 function renderTable(rows) {
   const groups = Array.isArray(state.accrualGroups) ? state.accrualGroups : [];
   const head = elements.resultTable?.querySelector("thead");
@@ -1935,6 +2041,22 @@ function onCalculateClick() {
     setStatus("Нужно войти в аккаунт.", true);
     return;
   }
+  const missingSebes = getMissingSebesArticles();
+  if (missingSebes.length > 0) {
+    const preview = missingSebes.slice(0, 50).join(", ");
+    const suffix = missingSebes.length > 50 ? " …" : "";
+    setStatus(
+      `Во вкладке "Себестоимость" не указаны данные для: ${preview}${suffix}. Расчет может быть неточным.`,
+      true
+    );
+    const confirmText =
+      "Во вкладке 'Себестоимость' нет данных по некоторым артикулам.\n" +
+      `Артикулы: ${preview}${suffix}\n\n` +
+      "Расчет может быть неточным. Продолжить расчет? (токен будет списан)";
+    if (!window.confirm(confirmText)) {
+      return;
+    }
+  }
   setStatus("Отправляю расчет…");
   calculateRemote().catch((error) => {
     const message = error && error.message ? error.message : "Неизвестная ошибка";
@@ -2040,6 +2162,8 @@ async function loadUserCredits(user) {
   if (!user) {
     state.userCredits = null;
     state.userRole = null;
+    state.lastRows = [];
+    updateDownloadAvailability();
     updateAuthUI(null);
     return;
   }
@@ -2055,6 +2179,7 @@ async function loadUserCredits(user) {
   }
   updateOwnerUI();
   updateAuthUI(user);
+  updateDownloadAvailability();
 }
 
 async function loadUserSebes(user) {
@@ -2201,6 +2326,10 @@ async function init() {
     elements.cashflowBody.addEventListener("focusin", onCashflowInputFocus);
     elements.cashflowBody.addEventListener("focusout", onCashflowInputBlur);
     elements.cashflowBody.addEventListener("click", onCashflowPeriodClick);
+  }
+  if (elements.downloadReport) {
+    elements.downloadReport.addEventListener("click", downloadReportExcel);
+    updateDownloadAvailability();
   }
 
   renderSebesTable(state.sebes);
