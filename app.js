@@ -1517,14 +1517,8 @@ async function calculateRemote() {
   const summary = data.summary;
   const rows = data.rows || [];
   const missingCosts = data.missingCosts || [];
-  const totalSales = rows.reduce((sum, row) => {
-    const byGroup = row.accrualByGroup || {};
-    return sum + getSalesValue(byGroup);
-  }, 0);
-  const marginByRealiz =
-    totalSales > 0 ? (Number(summary.revenueBeforeTax || 0) - Number(summary.totalCost || 0)) / totalSales : 0;
   state.accrualGroups = Array.isArray(data.accrualGroups) ? data.accrualGroups : [];
-  state.lastSummary = { ...summary, totalSales, marginByRealiz };
+  state.lastSummary = summary;
   state.lastRows = rows;
   state.lastCalcRange = { start: state.startDate, end: state.endDate };
   renderSummary(summary);
@@ -1818,8 +1812,7 @@ function renderSummary(values) {
       <div>Выручка: ${formatNumber(values.revenueBeforeTax)}</div>
       <div>Себес: ${formatNumber(values.totalCost)}</div>
       <div>Прочие: ${formatNumber(values.otherServicesTotal)}</div>
-      <div>Маржа по начислениям: ${formatPercent(values.marginBeforeTax)}</div>
-      <div>Маржа по реализации: ${formatPercent(values.marginByRealiz)}</div>
+      <div>Маржа: ${formatPercent(values.marginBeforeTax)}</div>
     </div>
   `;
 }
@@ -1837,21 +1830,17 @@ function downloadReportExcel() {
   const otherGroups = groups.filter((group) => group !== "Продажи");
   const rows = state.lastRows.map((row) => {
     const accrualByGroup = row.accrualByGroup || {};
-    const salesValue = getSalesValue(accrualByGroup);
-    const marginByRealiz =
-      salesValue > 0 ? (Number(row.revenue || 0) - Number(row.costSum || 0)) / salesValue : 0;
     const result = {
       "Артикул": row.article || "",
       "Себес": Number(row.cost || 0),
       "Кол-во доставлено": Number(row.qty || 0),
-      "Продажи": Number(salesValue || 0),
+      "Продажи": Number(getSalesValue(accrualByGroup) || 0),
       "Сумма себестоимости": Number(row.costSum || 0),
       "Прочие услуги": Number(row.otherPerArticle || 0),
       "Реклама": Number(row.ads || 0),
       "Начисления": Number(row.accrual || 0),
       "Выручка": Number(row.revenue || 0),
-      "Маржа по начислениям": Number(row.margin || 0),
-      "Маржа по реализации": Number(marginByRealiz || 0)
+      "Маржа": Number(row.margin || 0)
     };
     otherGroups.forEach((group) => {
       result[getGroupLabel(group)] = Number(accrualByGroup[group] || 0);
@@ -1869,8 +1858,7 @@ function downloadReportExcel() {
     ordered["Реклама"] = result["Реклама"];
     ordered["Начисления"] = result["Начисления"];
     ordered["Выручка"] = result["Выручка"];
-    ordered["Маржа по начислениям"] = result["Маржа по начислениям"];
-    ordered["Маржа по реализации"] = result["Маржа по реализации"];
+    ordered["Маржа"] = result["Маржа"];
     return ordered;
   });
 
@@ -1879,14 +1867,7 @@ function downloadReportExcel() {
         { "Показатель": "Выручка", "Значение": Number(state.lastSummary.revenueBeforeTax || 0) },
         { "Показатель": "Себес", "Значение": Number(state.lastSummary.totalCost || 0) },
         { "Показатель": "Прочие", "Значение": Number(state.lastSummary.otherServicesTotal || 0) },
-        {
-          "Показатель": "Маржа по начислениям",
-          "Значение": Number(state.lastSummary.marginBeforeTax || 0)
-        },
-        {
-          "Показатель": "Маржа по реализации",
-          "Значение": Number(state.lastSummary.marginByRealiz || 0)
-        }
+        { "Показатель": "Маржа", "Значение": Number(state.lastSummary.marginBeforeTax || 0) }
       ]
     : [];
 
@@ -1923,12 +1904,11 @@ function renderTable(rows) {
         <th>Реклама</th>
         <th>Начисления</th>
         <th>Выручка</th>
-        <th>Маржа по начислениям</th>
-        <th>Маржа по реализации</th>
+        <th>Маржа</th>
       </tr>
     `;
   }
-  const columnCount = 11 + otherGroups.length;
+  const columnCount = 10 + otherGroups.length;
   if (!rows || rows.length === 0) {
     elements.resultBody.innerHTML = `
       <tr>
@@ -1946,8 +1926,6 @@ function renderTable(rows) {
         .map((group) => `<td>${formatNumber(byGroup[group] || 0)}</td>`)
         .join("");
       const salesValue = getSalesValue(byGroup);
-      const marginByRealiz =
-        salesValue > 0 ? (Number(row.revenue || 0) - Number(row.costSum || 0)) / salesValue : 0;
       return `
         <tr>
           <td>${row.article}</td>
@@ -1961,7 +1939,6 @@ function renderTable(rows) {
           <td>${formatNumber(row.accrual)}</td>
           <td>${formatNumber(row.revenue)}</td>
           <td>${formatPercent(row.margin)}</td>
-          <td>${formatPercent(marginByRealiz)}</td>
         </tr>
       `;
     })
