@@ -2228,21 +2228,6 @@ async function onTelegramAuth(user) {
   }
 }
 
-function setupTelegramLogin() {
-  const container = document.getElementById("telegramLogin");
-  if (!container) return;
-  container.innerHTML = "";
-  window.onTelegramAuth = onTelegramAuth;
-  const script = document.createElement("script");
-  script.src = "https://telegram.org/js/telegram-widget.js?22";
-  script.async = true;
-  script.setAttribute("data-telegram-login", "margine_fact_app_bot");
-  script.setAttribute("data-size", "large");
-  script.setAttribute("data-userpic", "false");
-  script.setAttribute("data-request-access", "write");
-  script.setAttribute("data-onauth", "onTelegramAuth(user)");
-  container.appendChild(script);
-}
 
 async function requestPasswordReset() {
   const email = elements.emailAuth ? elements.emailAuth.value.trim() : "";
@@ -2702,7 +2687,7 @@ async function init() {
     });
   }
   setupPasswordToggles();
-  setupTelegramLogin();
+  window.onTelegramAuth = onTelegramAuth;
   if (elements.emailAuth) {
     elements.emailAuth.addEventListener("input", updateSignInButtonState);
   }

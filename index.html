@@ -19,7 +19,17 @@
           <p class="muted">
             Войдите по Email, чтобы открыть инструмент расчёта.
           </p>
-          <div id="telegramLogin" class="auth-telegram"></div>
+          <div class="auth-telegram">
+            <script
+              async
+              src="https://telegram.org/js/telegram-widget.js?22"
+              data-telegram-login="margine_fact_app_bot"
+              data-size="large"
+              data-userpic="false"
+              data-request-access="write"
+              data-onauth="onTelegramAuth(user)"
+            ></script>
+          </div>
           <label class="auth-field">
             Email
             <input type="email" id="emailAuth" placeholder="you@example.com" />
