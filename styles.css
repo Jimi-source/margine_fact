@@ -68,6 +68,22 @@ body {
   text-align: left;
 }
 
+.auth-password-row {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-password-row input {
+  flex: 1;
+}
+
+.password-toggle {
+  padding: 10px 14px;
+  font-size: 14px;
+}
+
 .auth-actions {
   margin-top: 18px;
   display: flex;

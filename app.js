@@ -2179,6 +2179,21 @@ function updateSignUpPasswordMatch() {
   }
 }
 
+function setupPasswordToggles() {
+  const toggles = Array.from(document.querySelectorAll("[data-toggle-password]"));
+  toggles.forEach((toggle) => {
+    const targetId = toggle.getAttribute("data-toggle-password");
+    const input = targetId ? document.getElementById(targetId) : null;
+    if (!input) return;
+    toggle.addEventListener("click", () => {
+      const isPassword = input.type === "password";
+      input.type = isPassword ? "text" : "password";
+      toggle.textContent = isPassword ? "Скрыть" : "Показать";
+      toggle.setAttribute("aria-pressed", String(isPassword));
+    });
+  });
+}
+
 async function authRequest(path, payload) {
   const response = await fetch(`${FUNCTIONS_BASE_URL}${path}`, {
     method: "POST",
@@ -2592,6 +2607,7 @@ async function init() {
       }
     });
   }
+  setupPasswordToggles();
   if (elements.signUpPassword) {
     elements.signUpPassword.addEventListener("input", updateSignUpPasswordMatch);
   }

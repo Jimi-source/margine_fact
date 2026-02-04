@@ -20,7 +20,12 @@
           </label>
           <label class="auth-field">
             Пароль
-            <input type="password" id="passwordAuth" placeholder="Минимум 6 символов" />
+            <div class="auth-password-row">
+              <input type="password" id="passwordAuth" placeholder="Минимум 6 символов" />
+              <button type="button" class="ghost-button password-toggle" data-toggle-password="passwordAuth">
+                Показать
+              </button>
+            </div>
           </label>
           <div class="auth-actions">
             <button type="button" id="emailSignIn" class="ghost-button">
@@ -383,11 +388,29 @@
           </label>
           <label class="auth-field">
             Пароль
-            <input type="password" id="signUpPassword" placeholder="Минимум 6 символов" />
+            <div class="auth-password-row">
+              <input type="password" id="signUpPassword" placeholder="Минимум 6 символов" />
+              <button
+                type="button"
+                class="ghost-button password-toggle"
+                data-toggle-password="signUpPassword"
+              >
+                Показать
+              </button>
+            </div>
           </label>
           <label class="auth-field">
             Повтор пароля
-            <input type="password" id="signUpPasswordRepeat" placeholder="Повторите пароль" />
+            <div class="auth-password-row">
+              <input type="password" id="signUpPasswordRepeat" placeholder="Повторите пароль" />
+              <button
+                type="button"
+                class="ghost-button password-toggle"
+                data-toggle-password="signUpPasswordRepeat"
+              >
+                Показать
+              </button>
+            </div>
           </label>
           <div class="auth-actions">
             <button type="button" id="signUpSubmit" class="primary-button">
