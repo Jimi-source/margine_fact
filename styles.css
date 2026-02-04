@@ -57,6 +57,18 @@ body {
   border: 1px solid var(--border);
 }
 
+.auth-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  text-align: left;
+}
+
+.auth-card-header h1 {
+  margin: 0;
+}
+
 .auth-divider {
   margin: 18px 0;
   color: var(--muted);
