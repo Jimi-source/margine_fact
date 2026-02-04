@@ -101,6 +101,7 @@ const elements = {
   signUpPassword: document.getElementById("signUpPassword"),
   signUpPasswordRepeat: document.getElementById("signUpPasswordRepeat"),
   signUpSubmit: document.getElementById("signUpSubmit"),
+  signUpStatus: document.getElementById("signUpStatus"),
   signOutButton: document.getElementById("signOutButton"),
   tabButtons: Array.from(document.querySelectorAll(".tab-button")),
   tabPanels: Array.from(document.querySelectorAll(".tab-panel")),
@@ -225,6 +226,12 @@ function setAuthStatus(message, isError = false) {
   if (!elements.authStatus) return;
   elements.authStatus.textContent = message;
   elements.authStatus.classList.toggle("error", isError);
+}
+
+function setSignUpStatus(message, isError = false) {
+  if (!elements.signUpStatus) return;
+  elements.signUpStatus.textContent = message;
+  elements.signUpStatus.classList.toggle("error", isError);
 }
 
 function updateDownloadAvailability() {
@@ -1030,6 +1037,7 @@ function validateElements() {
   if (!elements.signUpPassword) missing.push("signUpPassword");
   if (!elements.signUpPasswordRepeat) missing.push("signUpPasswordRepeat");
   if (!elements.signUpSubmit) missing.push("signUpSubmit");
+  if (!elements.signUpStatus) missing.push("signUpStatus");
   if (!elements.signOutButton) missing.push("signOutButton");
   if (!elements.sebesBody) missing.push("sebesBody");
   if (!elements.sebesStatus) missing.push("sebesStatus");
@@ -2164,6 +2172,7 @@ function closeSignUpModal() {
   if (elements.signUpEmail) elements.signUpEmail.value = "";
   if (elements.signUpPassword) elements.signUpPassword.value = "";
   if (elements.signUpPasswordRepeat) elements.signUpPasswordRepeat.value = "";
+  setSignUpStatus("");
 }
 
 function updateSignUpPasswordMatch() {
@@ -2171,11 +2180,11 @@ function updateSignUpPasswordMatch() {
   const repeat = elements.signUpPasswordRepeat ? elements.signUpPasswordRepeat.value : "";
   if (!repeat) return;
   if (password !== repeat) {
-    setAuthStatus("Пароли не совпадают.", true);
+    setSignUpStatus("Пароли не совпадают.", true);
     return;
   }
-  if (elements.authStatus && elements.authStatus.textContent === "Пароли не совпадают.") {
-    setAuthStatus("");
+  if (elements.signUpStatus && elements.signUpStatus.textContent === "Пароли не совпадают.") {
+    setSignUpStatus("");
   }
 }
 
@@ -2638,19 +2647,19 @@ async function init() {
         ? elements.signUpPasswordRepeat.value
         : "";
       if (!email || !password || !repeat) {
-        setAuthStatus("Введите email и дважды пароль.", true);
+        setSignUpStatus("Введите email и дважды пароль.", true);
         return;
       }
       if (password.length < 6) {
-        setAuthStatus("Пароль должен быть не короче 6 символов.", true);
+        setSignUpStatus("Пароль должен быть не короче 6 символов.", true);
         return;
       }
       if (password !== repeat) {
-        setAuthStatus("Пароли не совпадают.", true);
+        setSignUpStatus("Пароли не совпадают.", true);
         return;
       }
       try {
-        setAuthStatus("Создаю аккаунт…");
+        setSignUpStatus("Создаю аккаунт…");
         const data = await authRequest("/auth/register", { email, password });
         const token = data && data.token ? data.token : "";
         if (token) {
@@ -2661,7 +2670,7 @@ async function init() {
         }
         closeSignUpModal();
       } catch (error) {
-        setAuthStatus(mapAuthError(error), true);
+        setSignUpStatus(mapAuthError(error), true);
       }
     });
   }
