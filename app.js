@@ -2203,6 +2203,41 @@ function setupPasswordToggles() {
   });
 }
 
+async function requestPasswordReset() {
+  const email = elements.emailAuth ? elements.emailAuth.value.trim() : "";
+  if (!email) {
+    setAuthStatus("Введите email для восстановления.", true);
+    return;
+  }
+  try {
+    setAuthStatus("Отправляю код восстановления…");
+    await authRequest("/auth/reset", { email });
+    const code = window.prompt("Введите код из письма:");
+    if (!code) {
+      setAuthStatus("Восстановление отменено.", true);
+      return;
+    }
+    const newPassword = window.prompt("Введите новый пароль (минимум 6 символов):");
+    if (!newPassword || newPassword.length < 6) {
+      setAuthStatus("Пароль должен быть не короче 6 символов.", true);
+      return;
+    }
+    const repeat = window.prompt("Повторите новый пароль:");
+    if (newPassword !== repeat) {
+      setAuthStatus("Пароли не совпадают.", true);
+      return;
+    }
+    await authRequest("/auth/reset/confirm", {
+      email,
+      code: String(code).trim(),
+      password: newPassword
+    });
+    setAuthStatus("Пароль изменен. Теперь можно войти.");
+  } catch (error) {
+    setAuthStatus(mapAuthError(error), true);
+  }
+}
+
 function updateSignInButtonState() {
   if (!elements.emailSignIn) return;
   const email = elements.emailAuth ? elements.emailAuth.value.trim() : "";
@@ -2676,7 +2711,7 @@ async function init() {
   }
   if (elements.emailReset) {
     elements.emailReset.addEventListener("click", async () => {
-      setAuthStatus("Сброс пароля временно недоступен.", true);
+      await requestPasswordReset();
     });
   }
   if (elements.signOutButton) {
