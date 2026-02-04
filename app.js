@@ -2194,6 +2194,15 @@ function setupPasswordToggles() {
   });
 }
 
+function updateSignInButtonState() {
+  if (!elements.emailSignIn) return;
+  const email = elements.emailAuth ? elements.emailAuth.value.trim() : "";
+  const password = elements.passwordAuth ? elements.passwordAuth.value : "";
+  const ready = Boolean(email && password);
+  elements.emailSignIn.disabled = !ready;
+  elements.emailSignIn.classList.toggle("auth-signin-active", ready);
+}
+
 async function authRequest(path, payload) {
   const response = await fetch(`${FUNCTIONS_BASE_URL}${path}`, {
     method: "POST",
@@ -2608,6 +2617,13 @@ async function init() {
     });
   }
   setupPasswordToggles();
+  if (elements.emailAuth) {
+    elements.emailAuth.addEventListener("input", updateSignInButtonState);
+  }
+  if (elements.passwordAuth) {
+    elements.passwordAuth.addEventListener("input", updateSignInButtonState);
+  }
+  updateSignInButtonState();
   if (elements.signUpPassword) {
     elements.signUpPassword.addEventListener("input", updateSignUpPasswordMatch);
   }
@@ -2636,7 +2652,13 @@ async function init() {
       try {
         setAuthStatus("Создаю аккаунт…");
         const data = await authRequest("/auth/register", { email, password });
-        await handleAuthSuccess(email, data.token);
+        const token = data && data.token ? data.token : "";
+        if (token) {
+          await handleAuthSuccess(email, token);
+        } else {
+          const loginData = await authRequest("/auth/login", { email, password });
+          await handleAuthSuccess(email, loginData.token);
+        }
         closeSignUpModal();
       } catch (error) {
         setAuthStatus(mapAuthError(error), true);

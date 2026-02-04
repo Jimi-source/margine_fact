@@ -92,6 +92,18 @@ body {
   justify-content: center;
 }
 
+.auth-actions .auth-signin-active {
+  background: #1f9d56;
+  border-color: #1f9d56;
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(31, 157, 86, 0.25);
+}
+
+.auth-actions .auth-signin-active:hover {
+  background: #188548;
+  border-color: #188548;
+}
+
 .modal {
   position: fixed;
   inset: 0;
