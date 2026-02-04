@@ -2203,6 +2203,47 @@ function setupPasswordToggles() {
   });
 }
 
+async function telegramAuthRequest(payload) {
+  const response = await fetch(`${FUNCTIONS_BASE_URL}/auth/telegram`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {})
+  });
+  const data = await response.json();
+  if (!response.ok || !data || !data.ok) {
+    const errorMessage = data && data.error ? data.error : "Ошибка входа через Telegram.";
+    throw new Error(errorMessage);
+  }
+  return data;
+}
+
+async function onTelegramAuth(user) {
+  try {
+    setAuthStatus("Выполняю вход через Telegram…");
+    const data = await telegramAuthRequest(user);
+    const email = data.email || (user && user.username ? `@${user.username}` : "telegram");
+    await handleAuthSuccess(email, data.token);
+  } catch (error) {
+    setAuthStatus(mapAuthError(error), true);
+  }
+}
+
+function setupTelegramLogin() {
+  const container = document.getElementById("telegramLogin");
+  if (!container) return;
+  container.innerHTML = "";
+  window.onTelegramAuth = onTelegramAuth;
+  const script = document.createElement("script");
+  script.src = "https://telegram.org/js/telegram-widget.js?22";
+  script.async = true;
+  script.setAttribute("data-telegram-login", "margine_fact_app_bot");
+  script.setAttribute("data-size", "large");
+  script.setAttribute("data-userpic", "false");
+  script.setAttribute("data-request-access", "write");
+  script.setAttribute("data-onauth", "onTelegramAuth(user)");
+  container.appendChild(script);
+}
+
 async function requestPasswordReset() {
   const email = elements.emailAuth ? elements.emailAuth.value.trim() : "";
   if (!email) {
@@ -2661,6 +2702,7 @@ async function init() {
     });
   }
   setupPasswordToggles();
+  setupTelegramLogin();
   if (elements.emailAuth) {
     elements.emailAuth.addEventListener("input", updateSignInButtonState);
   }
