@@ -2166,6 +2166,19 @@ function closeSignUpModal() {
   if (elements.signUpPasswordRepeat) elements.signUpPasswordRepeat.value = "";
 }
 
+function updateSignUpPasswordMatch() {
+  const password = elements.signUpPassword ? elements.signUpPassword.value : "";
+  const repeat = elements.signUpPasswordRepeat ? elements.signUpPasswordRepeat.value : "";
+  if (!repeat) return;
+  if (password !== repeat) {
+    setAuthStatus("Пароли не совпадают.", true);
+    return;
+  }
+  if (elements.authStatus && elements.authStatus.textContent === "Пароли не совпадают.") {
+    setAuthStatus("");
+  }
+}
+
 async function authRequest(path, payload) {
   const response = await fetch(`${FUNCTIONS_BASE_URL}${path}`, {
     method: "POST",
@@ -2578,6 +2591,12 @@ async function init() {
         closeSignUpModal();
       }
     });
+  }
+  if (elements.signUpPassword) {
+    elements.signUpPassword.addEventListener("input", updateSignUpPasswordMatch);
+  }
+  if (elements.signUpPasswordRepeat) {
+    elements.signUpPasswordRepeat.addEventListener("input", updateSignUpPasswordMatch);
   }
   if (elements.signUpSubmit) {
     elements.signUpSubmit.addEventListener("click", async () => {
