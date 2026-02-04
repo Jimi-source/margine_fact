@@ -2213,7 +2213,9 @@ async function requestPasswordReset() {
   try {
     setAuthStatus("Создаю код восстановления…");
     await authRequest("/auth/reset", { email });
-    const code = window.prompt("Введите код восстановления (получите у администратора):");
+    const code = window.prompt(
+      "Введите код восстановления (получите у администратора https://t.me/prudnikovegor):"
+    );
     if (!code) {
       setAuthStatus("Восстановление отменено.", true);
       return;
