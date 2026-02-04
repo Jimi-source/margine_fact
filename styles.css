@@ -104,12 +104,6 @@ body {
   justify-content: center;
 }
 
-.auth-telegram {
-  margin: 18px 0 6px;
-  display: flex;
-  justify-content: center;
-}
-
 .auth-actions .auth-signin-active {
   background: #1f9d56;
   border-color: #1f9d56;

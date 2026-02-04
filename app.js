@@ -2203,31 +2203,6 @@ function setupPasswordToggles() {
   });
 }
 
-async function telegramAuthRequest(payload) {
-  const response = await fetch(`${FUNCTIONS_BASE_URL}/auth/telegram`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload || {})
-  });
-  const data = await response.json();
-  if (!response.ok || !data || !data.ok) {
-    const errorMessage = data && data.error ? data.error : "Ошибка входа через Telegram.";
-    throw new Error(errorMessage);
-  }
-  return data;
-}
-
-async function onTelegramAuth(user) {
-  try {
-    setAuthStatus("Выполняю вход через Telegram…");
-    const data = await telegramAuthRequest(user);
-    const email = data.email || (user && user.username ? `@${user.username}` : "telegram");
-    await handleAuthSuccess(email, data.token);
-  } catch (error) {
-    setAuthStatus(mapAuthError(error), true);
-  }
-}
-
 
 async function requestPasswordReset() {
   const email = elements.emailAuth ? elements.emailAuth.value.trim() : "";
@@ -2236,9 +2211,9 @@ async function requestPasswordReset() {
     return;
   }
   try {
-    setAuthStatus("Отправляю код восстановления…");
+    setAuthStatus("Создаю код восстановления…");
     await authRequest("/auth/reset", { email });
-    const code = window.prompt("Введите код из письма:");
+    const code = window.prompt("Введите код восстановления (получите у администратора):");
     if (!code) {
       setAuthStatus("Восстановление отменено.", true);
       return;
@@ -2687,7 +2662,6 @@ async function init() {
     });
   }
   setupPasswordToggles();
-  window.onTelegramAuth = onTelegramAuth;
   if (elements.emailAuth) {
     elements.emailAuth.addEventListener("input", updateSignInButtonState);
   }
