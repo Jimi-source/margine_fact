@@ -1601,7 +1601,7 @@ async function createPaymentRemote(packId) {
   }
   const url = data.confirmationUrl;
   if (url) {
-    window.open(url, "_blank", "noopener,noreferrer");
+    window.location.assign(url);
   } else {
     setBuyCreditsStatus("Не удалось получить ссылку оплаты.", true);
   }
