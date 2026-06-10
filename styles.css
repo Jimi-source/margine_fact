@@ -187,6 +187,7 @@ body {
   font-size: 32px;
   letter-spacing: -0.025em;
 }
+
 .auth-box {
   display: flex;
   flex-direction: column;
@@ -247,7 +248,6 @@ body {
 .tab-panel.hidden {
   display: none;
 }
-
 
 .muted {
   color: var(--muted);
@@ -781,4 +781,19 @@ tbody tr.cashflow-current {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+/* Cashflow: внутренняя прокрутка с липким заголовком */
+[data-panel="cashflow"] .table-wrap {
+  max-height: 520px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+#cashflowTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface-muted);
+  box-shadow: 0 1px 0 var(--border);
 }
