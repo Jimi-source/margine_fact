@@ -783,11 +783,16 @@ tbody tr.cashflow-current {
   flex-wrap: wrap;
 }
 
-/* Cashflow: внутренняя прокрутка с липким заголовком */
+/* Cashflow: горизонтальный скролл снаружи, вертикальный внутри */
 [data-panel="cashflow"] .table-wrap {
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+[data-panel="cashflow"] .table-wrap-inner {
   max-height: 520px;
   overflow-y: auto;
-  overflow-x: auto;
+  overflow-x: visible;
 }
 
 #cashflowTable thead th {
