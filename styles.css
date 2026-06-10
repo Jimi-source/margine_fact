@@ -627,7 +627,6 @@ table {
   border-collapse: collapse;
   font-size: 13px;
   background: var(--surface);
-  /* убран border-radius + overflow:hidden — они ломают position:sticky в thead */
 }
 
 th,
@@ -783,24 +782,17 @@ tbody tr.cashflow-current {
 }
 
 /* ───── Cashflow: скролл-контейнер таблицы ───── */
-[data-panel="cashflow"] .table-wrap {
-  overflow: auto;          /* скролл по обеим осям */
-  max-height: 520px;       /* высота контейнера */
+.table-wrap-inner {
+  overflow-y: auto;
+  max-height: 500px;
   border-radius: 16px;
   border: 1px solid var(--border);
 }
 
-[data-panel="cashflow"] .table-wrap table {
-  border-radius: 0;        /* скругление на враппере, не на таблице */
-}
-
-/* sticky-шапка: работает когда скролл-контейнер — .table-wrap */
 #cashflowTable thead th {
   position: sticky;
   top: 0;
   z-index: 2;
   background: var(--surface-muted);
-  /* тень вместо border-bottom, чтобы линия была видна при скролле */
-  box-shadow: 0 1px 0 var(--border), 0 2px 0 var(--surface-muted);
-  will-change: transform;
+  box-shadow: 0 1px 0 var(--border);
 }
