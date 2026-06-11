@@ -796,3 +796,9 @@ tbody tr.cashflow-current {
   background: var(--surface-muted);
   box-shadow: 0 1px 0 var(--border);
 }
+
+.chart-wrap {
+  position: relative;
+  width: 100%;
+  margin-top: 1rem;
+}

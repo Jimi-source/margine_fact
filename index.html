@@ -102,6 +102,9 @@
         <button type="button" class="tab-button" data-tab="cashflow">
           Cashflow
         </button>
+        <button type="button" class="tab-button" data-tab="chart">
+          График
+        </button>
       </div>
 
       <section class="card tab-panel" data-panel="calc">
@@ -361,9 +364,32 @@
           </div>
         </div>
       </section>
+
+      <section class="card tab-panel hidden" data-panel="chart">
+        <h2>График маржинальности</h2>
+        <div class="grid">
+          <label>
+            Год
+            <select id="chartYear"></select>
+          </label>
+          <label>
+            Отображение
+            <select id="chartGranularity">
+              <option value="week" selected>По неделям</option>
+              <option value="month">По месяцам</option>
+              <option value="quarter">По кварталам</option>
+            </select>
+          </label>
+        </div>
+        <div id="chartStatus" class="status"></div>
+        <div class="chart-wrap">
+          <canvas id="marginChart"></canvas>
+        </div>
+      </section>
       </div>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/cpexcel.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script defer src="app-globals.js"></script>
@@ -374,6 +400,7 @@
     <script defer src="app-cashflow.js"></script>
     <script defer src="app-calc.js"></script>
     <script defer src="app-auth.js"></script>
+    <script defer src="app-chart.js"></script>
     <script defer src="app-main.js"></script>
     <script>
       setTimeout(() => {

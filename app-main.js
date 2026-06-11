@@ -44,10 +44,15 @@ async function init() {
   }
   if (elements.tabButtons.length > 0) {
     elements.tabButtons.forEach((button) => {
-      button.addEventListener("click", () => setActiveTab(button.dataset.tab));
+      button.addEventListener("click", () => {
+        setActiveTab(button.dataset.tab);
+        if (button.dataset.tab === "chart") renderMarginChart();
+      });
     });
     setActiveTab("calc");
   }
+
+  setupChartTab();
 
   if (elements.cashflowYear) {
     const currentYear = new Date().getFullYear();

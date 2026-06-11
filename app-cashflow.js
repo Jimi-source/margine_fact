@@ -373,6 +373,7 @@ async function loadCashflow(year) {
     }
     renderCashflowTable();
     updateCashflowActions();
+    if (typeof renderMarginChart === "function") renderMarginChart();
   } catch (error) {
     setCashflowStatus("Не удалось загрузить кэшфлоу.", true);
   }
