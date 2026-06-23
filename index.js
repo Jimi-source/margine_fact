@@ -294,9 +294,7 @@ function calculateReport(payload) {
   for (const row of payload.accruals || []) {
     const article = row["Артикул"];
     if (!article) continue;
-    const dateValue = parseDateValue(
-      row["Дата принятия заказа в обработку или оказания услуги"]
-    );
+    const dateValue = parseDateValue(row["Дата начисления"]);
     const key = `${article}__${dateKey(dateValue)}`;
     accrualCountByArticleDate.set(key, (accrualCountByArticleDate.get(key) || 0) + 1);
   }
@@ -328,13 +326,11 @@ function calculateReport(payload) {
     }
 
     const pvpValue = promotionByShipment + promotionByOrder;
-    const dateValue = parseDateValue(
-      row["Дата принятия заказа в обработку или оказания услуги"]
-    );
+    const accrualDateValue = parseDateValue(row["Дата начисления"]);
     const name = row["Название товара"];
-    const stencilKey = `${dateKey(dateValue)}__${String(name || "").trim()}`;
+    const stencilKey = `${dateKey(accrualDateValue)}__${String(name || "").trim()}`;
     const stencilSum = stencilSumByKey.get(stencilKey) || 0;
-    const countKey = `${article}__${dateKey(dateValue)}`;
+    const countKey = `${article}__${dateKey(accrualDateValue)}`;
     const count = accrualCountByArticleDate.get(countKey) || 0;
     const stencilValue = count > 0 ? stencilSum / count : 0;
     const adsValue = pvpValue + stencilValue;
