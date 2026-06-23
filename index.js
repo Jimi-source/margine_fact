@@ -202,6 +202,9 @@ function buildPvpSumByOrderArticle(rows) {
 }
 
 function buildStencilSumByDateName(rows) {
+  const totalRows = (rows || []).length;
+  const allDates = (rows || []).map(r => r["Дата"]);
+  console.log(`[DEBUG stencil total] rows=${totalRows} dates=${JSON.stringify(allDates)}`);
   const sumByKey = new Map();
   for (const row of rows || []) {
     const rawDate = row["Дата"];
