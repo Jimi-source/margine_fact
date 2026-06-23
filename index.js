@@ -204,11 +204,15 @@ function buildPvpSumByOrderArticle(rows) {
 function buildStencilSumByDateName(rows) {
   const sumByKey = new Map();
   for (const row of rows || []) {
-    const dateValue = parseDateValue(row["Дата"]);
+    const rawDate = row["Дата"];
+    const dateValue = parseDateValue(rawDate);
     const name = row["Название товара"];
     if (!dateValue || !name) continue;
     const key = `${dateKey(dateValue)}__${String(name).trim()}`;
     const amount = parseNumber(row["Расход"]);
+    if (String(name).includes("гранат")) {
+      console.log(`[DEBUG stencil] rawDate=${JSON.stringify(rawDate)} → ${dateKey(dateValue)} amount=${amount} key=${key.substring(0, 60)}`);
+    }
     sumByKey.set(key, (sumByKey.get(key) || 0) + amount);
   }
   return sumByKey;
