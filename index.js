@@ -349,6 +349,10 @@ function calculateReport(payload) {
       adsByArticle.set(article, (adsByArticle.get(article) || 0) + adsValue);
     }
 
+    if (article === "Б-гранат" && stencilValue > 0) {
+      console.log(`[DEBUG Б-гранат] statusScore=${statusScore} type=${type} stencilKey=${stencilKey} stencilSum=${stencilSum} count=${count} stencilValue=${stencilValue.toFixed(4)} orderStatus="${statusByOrder}"|"${statusByShipment}"`);
+    }
+
     if (!article && otherServicesTypeSet.has(type)) {
       otherServicesTotal += amount;
     }
