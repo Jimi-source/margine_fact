@@ -263,7 +263,7 @@ async function init() {
   attachFileHandler(
     elements.stencilsFile,
     onFileChange("stencils", [
-      { name: "Дата", keys: ["дата"], required: true },
+      { name: "Дата", keys: ["день", "дата"], required: true },
       { name: "Название товара", keys: ["названиетовара", "наименованиетовара"], required: true },
       { name: "Расход", keys: ["расход", "стоимость", "сумма"], required: true }
     ], stencilsFallback)

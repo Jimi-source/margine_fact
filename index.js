@@ -202,9 +202,6 @@ function buildPvpSumByOrderArticle(rows) {
 }
 
 function buildStencilSumByDateName(rows) {
-  const totalRows = (rows || []).length;
-  const sample = (rows || []).slice(0, 20).map(r => ({d: r["Дата"], n: String(r["Название товара"] || "").substring(0, 20), v: r["Расход"]}));
-  console.log(`[DEBUG stencil total] rows=${totalRows} sample=${JSON.stringify(sample)}`);
   const sumByKey = new Map();
   for (const row of rows || []) {
     const rawDate = row["Дата"];
@@ -213,9 +210,6 @@ function buildStencilSumByDateName(rows) {
     if (!dateValue || !name) continue;
     const key = `${dateKey(dateValue)}__${String(name).trim()}`;
     const amount = parseNumber(row["Расход"]);
-    if (String(name).includes("гранат")) {
-      console.log(`[DEBUG stencil] rawDate=${JSON.stringify(rawDate)} → ${dateKey(dateValue)} amount=${amount} key=${key.substring(0, 60)}`);
-    }
     sumByKey.set(key, (sumByKey.get(key) || 0) + amount);
   }
   return sumByKey;
@@ -354,11 +348,6 @@ function calculateReport(payload) {
 
     if (statusScore === 1 && article) {
       adsByArticle.set(article, (adsByArticle.get(article) || 0) + adsValue);
-    }
-
-    if (article === "Б-гранат") {
-      const rawDate = row["Дата принятия заказа в обработку или оказания услуги"];
-      console.log(`[DEBUG Б-гранат] statusScore=${statusScore} type=${type} rawDate=${JSON.stringify(rawDate)} stencilKey=${stencilKey} stencilSum=${stencilSum} count=${count} stencilValue=${stencilValue.toFixed(4)} orderStatus="${statusByOrder}"|"${statusByShipment}"`);
     }
 
     if (!article && otherServicesTypeSet.has(type)) {
