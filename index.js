@@ -483,15 +483,13 @@ app.post("/auth/telegram", async (req, res) => {
     const username = req.body && req.body.username ? String(req.body.username) : "";
     const tgId = req.body && req.body.id ? String(req.body.id) : "";
     const email = username ? `@${username}` : `tg_${tgId}`;
-    const client = await pool.connect();
-    const { rows } = await client.query("select credits, role from users where id=$1", [email]);
+    const { rows } = await pool.query("select credits, role from users where id=$1", [email]);
     if (!rows.length) {
-      await client.query(
+      await pool.query(
         "insert into users(id,email,role,credits) values($1,$2,$3,$4)",
         [email, email, "user", 1]
       );
     }
-    client.release();
     const token = jwt.sign({ id: email, email }, JWT_SECRET, { expiresIn: "30d" });
     res.json({ ok: true, token, email });
   } catch (e) {
@@ -602,19 +600,16 @@ app.post("/initUser", async (req, res) => {
     const user = requireUser(req);
     const userId = getUserId(user);
     const userEmail = normalizeEmail(user.email || userId);
-    const client = await pool.connect();
-    const { rows } = await client.query("select credits, role from users where id=$1", [
+    const { rows } = await pool.query("select credits, role from users where id=$1", [
       userId
     ]);
     if (!rows.length) {
-      await client.query(
+      await pool.query(
         "insert into users(id,email,role,credits) values($1,$2,$3,$4)",
         [userId, userEmail, "user", 1]
       );
-      client.release();
       return res.json({ ok: true, credits: 1, role: "user" });
     }
-    client.release();
     res.json({
       ok: true,
       credits: Number(rows[0].credits || 0),
@@ -629,11 +624,9 @@ app.get("/sebes", async (req, res) => {
   try {
     const user = requireUser(req);
     const userId = getUserId(user);
-    const client = await pool.connect();
-    const { rows } = await client.query("select items from user_sebes where user_id=$1", [
+    const { rows } = await pool.query("select items from user_sebes where user_id=$1", [
       userId
     ]);
-    client.release();
     res.json({ ok: true, items: rows.length ? rows[0].items || [] : [] });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
@@ -645,12 +638,10 @@ app.post("/sebes", async (req, res) => {
     const user = requireUser(req);
     const userId = getUserId(user);
     const items = Array.isArray(req.body && req.body.items) ? req.body.items : [];
-    const client = await pool.connect();
-    await client.query(
+    await pool.query(
       "insert into user_sebes(user_id,items,updated_at) values($1,$2,now()) on conflict (user_id) do update set items=excluded.items, updated_at=now()",
       [userId, JSON.stringify(items)]
     );
-    client.release();
     res.json({ ok: true });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
@@ -665,12 +656,10 @@ app.get("/cashflow", async (req, res) => {
     if (!Number.isFinite(year)) {
       return res.status(400).json({ ok: false, error: "Year is required." });
     }
-    const client = await pool.connect();
-    const { rows } = await client.query(
+    const { rows } = await pool.query(
       "select entries, tax_rate from cashflow where user_id=$1 and year=$2",
       [userId, year]
     );
-    client.release();
     if (!rows.length) {
       return res.json({ ok: true, entries: {}, taxRate: 6 });
     }
@@ -694,12 +683,10 @@ app.post("/cashflow", async (req, res) => {
     }
     const entries = req.body && typeof req.body.entries === "object" ? req.body.entries : {};
     const taxRate = Number(req.body && req.body.taxRate);
-    const client = await pool.connect();
-    await client.query(
+    await pool.query(
       "insert into cashflow(user_id,year,entries,tax_rate,updated_at) values($1,$2,$3,$4,now()) on conflict (user_id,year) do update set entries=excluded.entries, tax_rate=excluded.tax_rate, updated_at=now()",
       [userId, year, JSON.stringify(entries), Number.isFinite(taxRate) ? taxRate : null]
     );
-    client.release();
     res.json({ ok: true });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
