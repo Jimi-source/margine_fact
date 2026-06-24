@@ -153,7 +153,9 @@ function downloadReportExcel() {
       "Реклама": Number(row.ads || 0),
       "Начисления": Number(row.accrual || 0),
       "Выручка": Number(row.revenue || 0),
-      "Маржа": Number(row.margin || 0)
+      "Маржа": Number(row.margin || 0),
+      "Сумма Отмен": Number(row.cancelSum || 0),
+      "Маржа без отмен": Number(row.marginWithoutCancel || 0)
     };
     otherGroups.forEach((group) => {
       result[getGroupLabel(group)] = Number(accrualByGroup[group] || 0);
@@ -172,6 +174,8 @@ function downloadReportExcel() {
     ordered["Начисления"] = result["Начисления"];
     ordered["Выручка"] = result["Выручка"];
     ordered["Маржа"] = result["Маржа"];
+    ordered["Сумма Отмен"] = result["Сумма Отмен"];
+    ordered["Маржа без отмен"] = result["Маржа без отмен"];
     return ordered;
   });
 
@@ -218,10 +222,12 @@ function renderTable(rows) {
         <th>Начисления</th>
         <th>Выручка</th>
         <th>Маржа</th>
+        <th>Сумма Отмен</th>
+        <th>Маржа без отмен</th>
       </tr>
     `;
   }
-  const columnCount = 10 + otherGroups.length;
+  const columnCount = 12 + otherGroups.length;
   if (!rows || rows.length === 0) {
     elements.resultBody.innerHTML = `
       <tr>
@@ -252,6 +258,8 @@ function renderTable(rows) {
           <td>${formatNumber(row.accrual)}</td>
           <td>${formatNumber(row.revenue)}</td>
           <td>${formatPercent(row.margin)}</td>
+          <td>${formatNumber(row.cancelSum || 0)}</td>
+          <td>${formatPercent(row.marginWithoutCancel || 0)}</td>
         </tr>
       `;
     })

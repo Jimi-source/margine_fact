@@ -228,6 +228,7 @@ function calculateReport(payload) {
   const accrualsByArticleGroup = new Map();
   const accrualGroupsSet = new Set();
   const adsByArticle = new Map();
+  const cancelSumByArticle = new Map();
   const otherServicesTypeSet = new Set(payload.otherServicesTypesSelected || []);
   let otherServicesTotal = 0;
   let realizTotal = 0;
@@ -350,6 +351,11 @@ function calculateReport(payload) {
       adsByArticle.set(article, (adsByArticle.get(article) || 0) + adsValue);
     }
 
+    const isCancelled = statusByOrder === "Отменён" || statusByShipment === "Отменён";
+    if (isCancelled && article) {
+      cancelSumByArticle.set(article, (cancelSumByArticle.get(article) || 0) + amount);
+    }
+
     if (!article && otherServicesTypeSet.has(type)) {
       otherServicesTotal += amount;
     }
@@ -378,6 +384,9 @@ function calculateReport(payload) {
     const ads = adsByArticle.get(article) || 0;
     const revenue = accrual - ads + otherPerArticle;
     const margin = revenue > 0 ? (revenue - costSum) / revenue : 0;
+    const cancelSum = cancelSumByArticle.get(article) || 0;
+    const revenueWithoutCancel = revenue - cancelSum;
+    const marginWithoutCancel = revenueWithoutCancel > 0 ? (revenueWithoutCancel - costSum) / revenueWithoutCancel : 0;
 
     const accrualByGroup = {};
     const groupMap = accrualsByArticleGroup.get(article) || new Map();
@@ -395,7 +404,9 @@ function calculateReport(payload) {
       accrual,
       ads,
       revenue,
-      margin
+      margin,
+      cancelSum,
+      marginWithoutCancel
     };
   });
 
