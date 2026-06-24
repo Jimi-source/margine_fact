@@ -413,6 +413,7 @@ function calculateReport(payload) {
   const totalCost = rows.reduce((sum, row) => sum + row.costSum, 0);
   const totalAccrual = rows.reduce((sum, row) => sum + row.accrual, 0);
   const totalAds = rows.reduce((sum, row) => sum + row.ads, 0);
+  const totalCancelSum = rows.reduce((sum, row) => sum + row.cancelSum, 0);
   const revenueBeforeTax = totalAccrual + otherServicesTotal - totalAds;
 
   const tax9 = realizTotal * 0.09;
@@ -423,6 +424,9 @@ function calculateReport(payload) {
 
   const marginBeforeTax =
     revenueBeforeTax > 0 ? (revenueBeforeTax - totalCost) / revenueBeforeTax : 0;
+  const revenueWithoutCancel = revenueBeforeTax - totalCancelSum;
+  const summaryMarginWithoutCancel =
+    revenueWithoutCancel > 0 ? (revenueWithoutCancel - totalCost) / revenueWithoutCancel : 0;
   const marginAfterTax9 =
     revenueBeforeTax > 0 ? (netWithTax9 - totalCost) / revenueBeforeTax : 0;
   const marginAfterTax5 =
@@ -441,7 +445,9 @@ function calculateReport(payload) {
     marginAfterTax9,
     tax5,
     netWithTax5,
-    marginAfterTax5
+    marginAfterTax5,
+    totalCancelSum,
+    summaryMarginWithoutCancel
   };
 
   return {

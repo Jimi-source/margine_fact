@@ -126,6 +126,8 @@ function renderSummary(values) {
       <div>Себес: ${formatNumber(values.totalCost)}</div>
       <div>Прочие: ${formatNumber(values.otherServicesTotal)}</div>
       <div>Маржа: ${formatPercent(values.marginBeforeTax)}</div>
+      <div>Сумма Отмен: ${formatNumber(values.totalCancelSum)}</div>
+      <div>Маржа без отмен: ${formatPercent(values.summaryMarginWithoutCancel)}</div>
     </div>
   `;
 }
@@ -184,7 +186,9 @@ function downloadReportExcel() {
         { "Показатель": "Выручка", "Значение": Number(state.lastSummary.revenueBeforeTax || 0) },
         { "Показатель": "Себес", "Значение": Number(state.lastSummary.totalCost || 0) },
         { "Показатель": "Прочие", "Значение": Number(state.lastSummary.otherServicesTotal || 0) },
-        { "Показатель": "Маржа", "Значение": Number(state.lastSummary.marginBeforeTax || 0) }
+        { "Показатель": "Маржа", "Значение": Number(state.lastSummary.marginBeforeTax || 0) },
+        { "Показатель": "Сумма Отмен", "Значение": Number(state.lastSummary.totalCancelSum || 0) },
+        { "Показатель": "Маржа без отмен", "Значение": Number(state.lastSummary.summaryMarginWithoutCancel || 0) }
       ]
     : [];
 
