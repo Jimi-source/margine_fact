@@ -1,4 +1,5 @@
 let marginChartInstance = null;
+const pctChartInstances = {};
 const chartVisibility = {};
 
 const STATIC_DATASETS = [
@@ -103,18 +104,6 @@ const GROUP_COLORS = [
   { color: "rgba(148,163,184,0.55)", border: "rgb(100,116,139)" }
 ];
 
-// Цвета для % линий (более прозрачные/пунктирные)
-const PCT_LINE_COLORS = [
-  "rgb(147,197,253)",
-  "rgb(196,181,253)",
-  "rgb(253,230,138)",
-  "rgb(252,165,165)",
-  "rgb(110,231,183)",
-  "rgb(203,213,225)",
-  "rgb(249,168,212)",
-  "rgb(167,243,208)"
-];
-
 function initChartYearSelect() {
   const select = document.getElementById("chartYear");
   if (!select) return;
@@ -141,7 +130,6 @@ function getKnownGroups(periods) {
   return Array.from(groups).sort();
 }
 
-// Строит полный список датасетов: группы + статика + % от Продаж
 function buildAllDatasets(knownGroups) {
   const groupDatasets = knownGroups.map((group, i) => {
     const c = GROUP_COLORS[i % GROUP_COLORS.length];
@@ -157,25 +145,23 @@ function buildAllDatasets(knownGroups) {
       unit: "₽"
     };
   });
+  return [...groupDatasets, ...STATIC_DATASETS];
+}
 
-  // % от Продаж — для всех рублёвых датасетов (кроме qty и уже %-ных)
-  const rubDatasets = [...groupDatasets, ...STATIC_DATASETS].filter(
-    (ds) => ds.unit === "₽"
-  );
-  const pctFromSalesDatasets = rubDatasets.map((ds, i) => ({
-    key: `pct_sales__${ds.key}`,
-    sourceKey: ds.key,
-    label: `${ds.label} % от Продаж`,
-    color: "transparent",
-    border: PCT_LINE_COLORS[i % PCT_LINE_COLORS.length],
-    yAxis: "yPct",
-    type: "line",
-    order: 0,
-    unit: "%",
-    isPctFromSales: true
+// Возвращает датасеты для маленьких графиков: все рублёвые, кроме группы Продажи
+function buildPctDatasets(knownGroups) {
+  const groupDatasets = knownGroups
+    .filter((g) => g !== "Продажи")
+    .map((group, i) => {
+      const c = GROUP_COLORS[i % GROUP_COLORS.length];
+      return { key: `group__${group}`, groupName: group, label: getGroupLabel(group), border: c.border };
+    });
+  const staticRub = STATIC_DATASETS.filter((ds) => ds.unit === "₽").map((ds) => ({
+    key: ds.key,
+    label: ds.label,
+    border: ds.border
   }));
-
-  return [...groupDatasets, ...STATIC_DATASETS, ...pctFromSalesDatasets];
+  return [...groupDatasets, ...staticRub];
 }
 
 function getChartData(allDatasets, periods) {
@@ -190,11 +176,7 @@ function getChartData(allDatasets, periods) {
     if (!hasMeta) return;
 
     labels.push(period.label);
-
-    // Сначала считаем базовые значения
-    const baseValues = {};
     allDatasets.forEach((ds) => {
-      if (ds.isPctFromSales) return;
       let raw;
       if (ds.groupName !== undefined) {
         raw = summary.totalByGroup ? (summary.totalByGroup[ds.groupName] || 0) : null;
@@ -202,19 +184,39 @@ function getChartData(allDatasets, periods) {
         raw = summary[ds.key] !== undefined ? summary[ds.key] : entry[ds.key];
       }
       const val = Number.isFinite(raw) ? raw : null;
-      // % метрики храним как доли (0..1), умножаем в x100 для отображения
       const scaled = val !== null && ds.unit === "%" ? Math.round(val * 10000) / 100 : val;
-      baseValues[ds.key] = scaled !== null ? Math.round(scaled * 100) / 100 : null;
-      dataByKey[ds.key].push(baseValues[ds.key]);
+      dataByKey[ds.key].push(scaled !== null ? Math.round(scaled * 100) / 100 : null);
     });
+  });
 
-    // Считаем % от Продаж
-    const salesGroup = summary.totalByGroup ? (summary.totalByGroup["Продажи"] || 0) : 0;
-    allDatasets.forEach((ds) => {
-      if (!ds.isPctFromSales) return;
-      const sourceVal = baseValues[ds.sourceKey];
-      const pct = sourceVal !== null && salesGroup !== 0
-        ? Math.round((sourceVal / salesGroup) * 10000) / 100
+  return { labels, dataByKey };
+}
+
+// Данные % от Продаж для маленьких графиков
+function getPctData(pctDatasets, periods) {
+  const labels = [];
+  const dataByKey = {};
+  pctDatasets.forEach((ds) => { dataByKey[ds.key] = []; });
+
+  periods.forEach((period) => {
+    const entry = getCashflowEntry(period.key);
+    const summary = entry.summary || {};
+    const hasMeta = Number.isFinite(summary.marginBeforeTax) || Number.isFinite(entry.marginBeforeTax);
+    if (!hasMeta) return;
+
+    const sales = summary.totalByGroup ? (summary.totalByGroup["Продажи"] || 0) : 0;
+    labels.push(period.label);
+
+    pctDatasets.forEach((ds) => {
+      let raw;
+      if (ds.groupName !== undefined) {
+        raw = summary.totalByGroup ? (summary.totalByGroup[ds.groupName] || 0) : null;
+      } else {
+        raw = summary[ds.key] !== undefined ? summary[ds.key] : entry[ds.key];
+      }
+      const val = Number.isFinite(raw) ? raw : null;
+      const pct = val !== null && sales !== 0
+        ? Math.round((val / sales) * 10000) / 100
         : null;
       dataByKey[ds.key].push(pct);
     });
@@ -228,39 +230,17 @@ function renderChartLegend(allDatasets) {
   if (!container) return;
 
   allDatasets.forEach((ds) => {
-    if (chartVisibility[ds.key] === undefined) {
-      // По умолчанию % от Продаж скрыты
-      chartVisibility[ds.key] = !ds.isPctFromSales;
-    }
+    if (chartVisibility[ds.key] === undefined) chartVisibility[ds.key] = true;
   });
 
-  // Разбиваем легенду на две части
-  const mainDatasets = allDatasets.filter((ds) => !ds.isPctFromSales);
-  const pctDatasets = allDatasets.filter((ds) => ds.isPctFromSales);
-
-  const makeBtn = (ds) => {
+  container.innerHTML = allDatasets.map((ds) => {
     const active = chartVisibility[ds.key];
     return `
-      <button
-        class="chart-legend-btn${active ? " active" : ""}"
-        data-key="${ds.key}"
-        style="--legend-color:${ds.border}"
-      >
-        <span class="chart-legend-dot${ds.isPctFromSales ? " dot-line" : ""}"></span>
-        ${ds.label}
+      <button class="chart-legend-btn${active ? " active" : ""}" data-key="${ds.key}" style="--legend-color:${ds.border}">
+        <span class="chart-legend-dot"></span>${ds.label}
       </button>
     `;
-  };
-
-  container.innerHTML = `
-    <div class="chart-legend-group">
-      ${mainDatasets.map(makeBtn).join("")}
-    </div>
-    <div class="chart-legend-divider">% от Продаж</div>
-    <div class="chart-legend-group">
-      ${pctDatasets.map(makeBtn).join("")}
-    </div>
-  `;
+  }).join("");
 
   container.querySelectorAll(".chart-legend-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -272,6 +252,93 @@ function renderChartLegend(allDatasets) {
         if (idx !== -1) {
           marginChartInstance.data.datasets[idx].hidden = !chartVisibility[key];
           marginChartInstance.update();
+        }
+      }
+    });
+  });
+}
+
+function renderPctCharts(pctDatasets, labels, dataByKey) {
+  const section = document.getElementById("chartPctSection");
+  const grid = document.getElementById("chartPctGrid");
+  if (!grid || !section) return;
+
+  if (labels.length === 0) {
+    section.classList.add("hidden");
+    return;
+  }
+  section.classList.remove("hidden");
+
+  // Уничтожаем старые инстансы
+  Object.values(pctChartInstances).forEach((c) => c.destroy());
+  Object.keys(pctChartInstances).forEach((k) => delete pctChartInstances[k]);
+
+  grid.innerHTML = pctDatasets.map((ds) => `
+    <div class="chart-pct-item">
+      <div class="chart-pct-item-title" style="color:${ds.border}">${ds.label}</div>
+      <canvas id="pctChart__${ds.key.replace(/[^a-zA-Z0-9]/g, "_")}"></canvas>
+    </div>
+  `).join("");
+
+  pctDatasets.forEach((ds) => {
+    const canvasId = `pctChart__${ds.key.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const values = dataByKey[ds.key];
+    const hasData = values.some((v) => v !== null);
+    if (!hasData) return;
+
+    pctChartInstances[ds.key] = new Chart(canvas, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [{
+          data: values,
+          borderColor: ds.border,
+          backgroundColor: ds.border.replace("rgb(", "rgba(").replace(")", ",0.08)"),
+          borderWidth: 2,
+          pointRadius: labels.length <= 8 ? 3 : 2,
+          pointHoverRadius: 5,
+          fill: true,
+          tension: 0.3,
+          spanGaps: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "rgba(15,23,42,0.92)",
+            titleColor: "#e2e8f0",
+            bodyColor: "#cbd5e1",
+            padding: 8,
+            callbacks: {
+              title: (items) => items[0].label,
+              label: (ctx) => ctx.parsed.y !== null ? ` ${ctx.parsed.y.toFixed(1)} %` : null
+            }
+          }
+        },
+        scales: {
+          y: {
+            ticks: {
+              callback: (v) => `${v}%`,
+              color: "#94a3b8",
+              font: { size: 9 },
+              maxTicksLimit: 4
+            },
+            grid: { color: "rgba(148,163,184,0.1)" }
+          },
+          x: {
+            ticks: {
+              color: "#94a3b8",
+              font: { size: 9 },
+              maxRotation: 45,
+              maxTicksLimit: 6
+            },
+            grid: { display: false }
+          }
         }
       }
     });
@@ -295,6 +362,11 @@ function renderMarginChart() {
 
   renderChartLegend(allDatasets);
 
+  // Маленькие графики % от Продаж
+  const pctDatasets = buildPctDatasets(knownGroups);
+  const { labels: pctLabels, dataByKey: pctDataByKey } = getPctData(pctDatasets, periods);
+  renderPctCharts(pctDatasets, pctLabels, pctDataByKey);
+
   if (labels.length === 0) {
     if (statusEl) statusEl.textContent = "Нет данных. Сначала рассчитайте периоды во вкладке Cashflow.";
     if (marginChartInstance) {
@@ -308,16 +380,14 @@ function renderMarginChart() {
   const datasets = allDatasets.map((ds) => ({
     _key: ds.key,
     _unit: ds.unit,
-    _isPctFromSales: ds.isPctFromSales || false,
     label: ds.label,
     data: dataByKey[ds.key],
     backgroundColor: ds.color,
     borderColor: ds.border,
-    borderWidth: ds.type === "line" ? (ds.isPctFromSales ? 1.5 : 2.5) : 1,
-    borderDash: ds.isPctFromSales ? [4, 3] : [],
+    borderWidth: ds.type === "line" ? 2.5 : 1,
     borderRadius: ds.type === "bar" ? 4 : 0,
-    pointRadius: ds.type === "line" ? (ds.isPctFromSales ? 2 : 4) : 0,
-    pointHoverRadius: ds.type === "line" ? 5 : 0,
+    pointRadius: ds.type === "line" ? 4 : 0,
+    pointHoverRadius: ds.type === "line" ? 6 : 0,
     fill: false,
     tension: 0.3,
     type: ds.type,
@@ -368,10 +438,7 @@ function renderMarginChart() {
         yRub: {
           type: "linear",
           position: "left",
-          ticks: {
-            callback: (v) => `${(v / 1000).toLocaleString("ru-RU")}k ₽`,
-            color: "#94a3b8"
-          },
+          ticks: { callback: (v) => `${(v / 1000).toLocaleString("ru-RU")}k ₽`, color: "#94a3b8" },
           grid: { color: "rgba(148,163,184,0.12)" },
           border: { dash: [4, 4] }
         },
@@ -379,28 +446,18 @@ function renderMarginChart() {
           type: "linear",
           position: "left",
           display: "auto",
-          ticks: {
-            callback: (v) => `${Math.round(v).toLocaleString("ru-RU")} шт`,
-            color: "#94a3b8"
-          },
+          ticks: { callback: (v) => `${Math.round(v).toLocaleString("ru-RU")} шт`, color: "#94a3b8" },
           grid: { display: false }
         },
         yPct: {
           type: "linear",
           position: "right",
-          ticks: {
-            callback: (v) => `${v} %`,
-            color: "#34d399"
-          },
+          ticks: { callback: (v) => `${v} %`, color: "#34d399" },
           grid: { display: false },
           border: { dash: [4, 4] }
         },
         x: {
-          ticks: {
-            maxRotation: 45,
-            font: { size: 11 },
-            color: "#94a3b8"
-          },
+          ticks: { maxRotation: 45, font: { size: 11 }, color: "#94a3b8" },
           grid: { display: false }
         }
       }
@@ -410,7 +467,6 @@ function renderMarginChart() {
 
 function setupChartTab() {
   initChartYearSelect();
-
   const yearSelect = document.getElementById("chartYear");
   const granSelect = document.getElementById("chartGranularity");
   if (yearSelect) yearSelect.addEventListener("change", renderMarginChart);

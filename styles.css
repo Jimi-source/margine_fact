@@ -869,14 +869,43 @@ tbody tr.cashflow-current {
   gap: 8px;
 }
 
-.chart-legend-divider {
-  width: 100%;
-  font-size: 11px;
+.chart-pct-section {
+  margin-top: 2rem;
+}
+
+.chart-pct-title {
+  font-size: 13px;
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  margin-top: 4px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
+  margin: 0 0 1rem 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.chart-pct-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.chart-pct-item {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px 10px;
+}
+
+.chart-pct-item-title {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chart-pct-item canvas {
+  height: 90px !important;
 }
