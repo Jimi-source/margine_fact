@@ -27,7 +27,7 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "50mb" }));
 
 const pool = new Pool({
   host: process.env.DB_HOST,
