@@ -1,16 +1,16 @@
 let marginChartInstance = null;
 const chartVisibility = {};
 
-// Статические показатели (всегда есть в summary)
 const STATIC_DATASETS = [
   {
     key: "totalQty",
     label: "Кол-во доставлено",
     color: "rgba(148,163,184,0.7)",
     border: "rgb(100,116,139)",
-    yAxis: "yRub",
+    yAxis: "yQty",
     type: "bar",
-    order: 3
+    order: 3,
+    unit: "шт"
   },
   {
     key: "totalCost",
@@ -19,7 +19,8 @@ const STATIC_DATASETS = [
     border: "rgb(221,72,20)",
     yAxis: "yRub",
     type: "bar",
-    order: 3
+    order: 3,
+    unit: "₽"
   },
   {
     key: "otherServicesTotal",
@@ -28,7 +29,8 @@ const STATIC_DATASETS = [
     border: "rgb(124,58,237)",
     yAxis: "yRub",
     type: "bar",
-    order: 3
+    order: 3,
+    unit: "₽"
   },
   {
     key: "totalAds",
@@ -37,7 +39,8 @@ const STATIC_DATASETS = [
     border: "rgb(217,119,6)",
     yAxis: "yRub",
     type: "bar",
-    order: 3
+    order: 3,
+    unit: "₽"
   },
   {
     key: "totalAccrual",
@@ -46,7 +49,8 @@ const STATIC_DATASETS = [
     border: "rgb(49,130,206)",
     yAxis: "yRub",
     type: "bar",
-    order: 3
+    order: 3,
+    unit: "₽"
   },
   {
     key: "revenueBeforeTax",
@@ -55,7 +59,8 @@ const STATIC_DATASETS = [
     border: "rgb(16,185,129)",
     yAxis: "yRub",
     type: "bar",
-    order: 3
+    order: 3,
+    unit: "₽"
   },
   {
     key: "totalCancelSum",
@@ -64,7 +69,8 @@ const STATIC_DATASETS = [
     border: "rgb(220,38,38)",
     yAxis: "yRub",
     type: "bar",
-    order: 3
+    order: 3,
+    unit: "₽"
   },
   {
     key: "marginBeforeTax",
@@ -74,7 +80,7 @@ const STATIC_DATASETS = [
     yAxis: "yPct",
     type: "line",
     order: 1,
-    isPercent: true
+    unit: "%"
   },
   {
     key: "summaryMarginWithoutCancel",
@@ -84,11 +90,10 @@ const STATIC_DATASETS = [
     yAxis: "yPct",
     type: "line",
     order: 1,
-    isPercent: true
+    unit: "%"
   }
 ];
 
-// Цвета для динамических групп начислений
 const GROUP_COLORS = [
   { color: "rgba(99,179,237,0.55)", border: "rgb(49,130,206)" },
   { color: "rgba(167,139,250,0.55)", border: "rgb(124,58,237)" },
@@ -96,6 +101,18 @@ const GROUP_COLORS = [
   { color: "rgba(248,113,113,0.55)", border: "rgb(220,38,38)" },
   { color: "rgba(52,211,153,0.55)", border: "rgb(16,185,129)" },
   { color: "rgba(148,163,184,0.55)", border: "rgb(100,116,139)" }
+];
+
+// Цвета для % линий (более прозрачные/пунктирные)
+const PCT_LINE_COLORS = [
+  "rgb(147,197,253)",
+  "rgb(196,181,253)",
+  "rgb(253,230,138)",
+  "rgb(252,165,165)",
+  "rgb(110,231,183)",
+  "rgb(203,213,225)",
+  "rgb(249,168,212)",
+  "rgb(167,243,208)"
 ];
 
 function initChartYearSelect() {
@@ -112,7 +129,6 @@ function initChartYearSelect() {
   }
 }
 
-// Собирает динамические группы (totalByGroup) из всех сохранённых периодов
 function getKnownGroups(periods) {
   const groups = new Set();
   periods.forEach((period) => {
@@ -125,6 +141,7 @@ function getKnownGroups(periods) {
   return Array.from(groups).sort();
 }
 
+// Строит полный список датасетов: группы + статика + % от Продаж
 function buildAllDatasets(knownGroups) {
   const groupDatasets = knownGroups.map((group, i) => {
     const c = GROUP_COLORS[i % GROUP_COLORS.length];
@@ -136,10 +153,29 @@ function buildAllDatasets(knownGroups) {
       border: c.border,
       yAxis: "yRub",
       type: "bar",
-      order: 2
+      order: 2,
+      unit: "₽"
     };
   });
-  return [...groupDatasets, ...STATIC_DATASETS];
+
+  // % от Продаж — для всех рублёвых датасетов (кроме qty и уже %-ных)
+  const rubDatasets = [...groupDatasets, ...STATIC_DATASETS].filter(
+    (ds) => ds.unit === "₽"
+  );
+  const pctFromSalesDatasets = rubDatasets.map((ds, i) => ({
+    key: `pct_sales__${ds.key}`,
+    sourceKey: ds.key,
+    label: `${ds.label} % от Продаж`,
+    color: "transparent",
+    border: PCT_LINE_COLORS[i % PCT_LINE_COLORS.length],
+    yAxis: "yPct",
+    type: "line",
+    order: 0,
+    unit: "%",
+    isPctFromSales: true
+  }));
+
+  return [...groupDatasets, ...STATIC_DATASETS, ...pctFromSalesDatasets];
 }
 
 function getChartData(allDatasets, periods) {
@@ -154,7 +190,11 @@ function getChartData(allDatasets, periods) {
     if (!hasMeta) return;
 
     labels.push(period.label);
+
+    // Сначала считаем базовые значения
+    const baseValues = {};
     allDatasets.forEach((ds) => {
+      if (ds.isPctFromSales) return;
       let raw;
       if (ds.groupName !== undefined) {
         raw = summary.totalByGroup ? (summary.totalByGroup[ds.groupName] || 0) : null;
@@ -162,8 +202,21 @@ function getChartData(allDatasets, periods) {
         raw = summary[ds.key] !== undefined ? summary[ds.key] : entry[ds.key];
       }
       const val = Number.isFinite(raw) ? raw : null;
-      const scaled = val !== null && ds.isPercent ? Math.round(val * 10000) / 100 : val;
-      dataByKey[ds.key].push(scaled !== null ? Math.round(scaled * 100) / 100 : null);
+      // % метрики храним как доли (0..1), умножаем в x100 для отображения
+      const scaled = val !== null && ds.unit === "%" ? Math.round(val * 10000) / 100 : val;
+      baseValues[ds.key] = scaled !== null ? Math.round(scaled * 100) / 100 : null;
+      dataByKey[ds.key].push(baseValues[ds.key]);
+    });
+
+    // Считаем % от Продаж
+    const salesGroup = summary.totalByGroup ? (summary.totalByGroup["Продажи"] || 0) : 0;
+    allDatasets.forEach((ds) => {
+      if (!ds.isPctFromSales) return;
+      const sourceVal = baseValues[ds.sourceKey];
+      const pct = sourceVal !== null && salesGroup !== 0
+        ? Math.round((sourceVal / salesGroup) * 10000) / 100
+        : null;
+      dataByKey[ds.key].push(pct);
     });
   });
 
@@ -174,12 +227,18 @@ function renderChartLegend(allDatasets) {
   const container = document.getElementById("chartLegend");
   if (!container) return;
 
-  // Инициализируем видимость для новых ключей
   allDatasets.forEach((ds) => {
-    if (chartVisibility[ds.key] === undefined) chartVisibility[ds.key] = true;
+    if (chartVisibility[ds.key] === undefined) {
+      // По умолчанию % от Продаж скрыты
+      chartVisibility[ds.key] = !ds.isPctFromSales;
+    }
   });
 
-  container.innerHTML = allDatasets.map((ds) => {
+  // Разбиваем легенду на две части
+  const mainDatasets = allDatasets.filter((ds) => !ds.isPctFromSales);
+  const pctDatasets = allDatasets.filter((ds) => ds.isPctFromSales);
+
+  const makeBtn = (ds) => {
     const active = chartVisibility[ds.key];
     return `
       <button
@@ -187,11 +246,21 @@ function renderChartLegend(allDatasets) {
         data-key="${ds.key}"
         style="--legend-color:${ds.border}"
       >
-        <span class="chart-legend-dot"></span>
+        <span class="chart-legend-dot${ds.isPctFromSales ? " dot-line" : ""}"></span>
         ${ds.label}
       </button>
     `;
-  }).join("");
+  };
+
+  container.innerHTML = `
+    <div class="chart-legend-group">
+      ${mainDatasets.map(makeBtn).join("")}
+    </div>
+    <div class="chart-legend-divider">% от Продаж</div>
+    <div class="chart-legend-group">
+      ${pctDatasets.map(makeBtn).join("")}
+    </div>
+  `;
 
   container.querySelectorAll(".chart-legend-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -222,7 +291,6 @@ function renderMarginChart() {
 
   const knownGroups = getKnownGroups(periods);
   const allDatasets = buildAllDatasets(knownGroups);
-
   const { labels, dataByKey } = getChartData(allDatasets, periods);
 
   renderChartLegend(allDatasets);
@@ -239,14 +307,17 @@ function renderMarginChart() {
 
   const datasets = allDatasets.map((ds) => ({
     _key: ds.key,
+    _unit: ds.unit,
+    _isPctFromSales: ds.isPctFromSales || false,
     label: ds.label,
     data: dataByKey[ds.key],
     backgroundColor: ds.color,
     borderColor: ds.border,
-    borderWidth: ds.type === "line" ? 2.5 : 1,
+    borderWidth: ds.type === "line" ? (ds.isPctFromSales ? 1.5 : 2.5) : 1,
+    borderDash: ds.isPctFromSales ? [4, 3] : [],
     borderRadius: ds.type === "bar" ? 4 : 0,
-    pointRadius: ds.type === "line" ? 4 : 0,
-    pointHoverRadius: ds.type === "line" ? 6 : 0,
+    pointRadius: ds.type === "line" ? (ds.isPctFromSales ? 2 : 4) : 0,
+    pointHoverRadius: ds.type === "line" ? 5 : 0,
     fill: false,
     tension: 0.3,
     type: ds.type,
@@ -256,9 +327,19 @@ function renderMarginChart() {
     spanGaps: true
   }));
 
+  const tooltipLabel = (ctx) => {
+    if (ctx.parsed.y === null) return null;
+    const unit = ctx.dataset._unit;
+    const val = ctx.parsed.y;
+    if (unit === "%") return ` ${ctx.dataset.label}: ${val.toFixed(2)} %`;
+    if (unit === "шт") return ` ${ctx.dataset.label}: ${Math.round(val).toLocaleString("ru-RU")} шт`;
+    return ` ${ctx.dataset.label}: ${Number(val).toLocaleString("ru-RU")} ₽`;
+  };
+
   if (marginChartInstance) {
     marginChartInstance.data.labels = labels;
     marginChartInstance.data.datasets = datasets;
+    marginChartInstance.options.plugins.tooltip.callbacks.label = tooltipLabel;
     marginChartInstance.update();
     return;
   }
@@ -279,17 +360,8 @@ function renderMarginChart() {
           borderColor: "rgba(255,255,255,0.1)",
           borderWidth: 1,
           padding: 12,
-          callbacks: {
-            label: (ctx) => {
-              if (ctx.parsed.y === null || ctx.dataset.hidden) return null;
-              const ds = allDatasets[ctx.datasetIndex];
-              const val = ctx.parsed.y;
-              if (!ds) return null;
-              return ds.isPercent
-                ? ` ${ctx.dataset.label}: ${val.toFixed(2)} %`
-                : ` ${ctx.dataset.label}: ${Number(val).toLocaleString("ru-RU")} ${ds.key === "totalQty" ? "шт" : "₽"}`;
-            }
-          }
+          filter: (item) => !item.dataset.hidden,
+          callbacks: { label: tooltipLabel }
         }
       },
       scales: {
@@ -302,6 +374,16 @@ function renderMarginChart() {
           },
           grid: { color: "rgba(148,163,184,0.12)" },
           border: { dash: [4, 4] }
+        },
+        yQty: {
+          type: "linear",
+          position: "left",
+          display: "auto",
+          ticks: {
+            callback: (v) => `${Math.round(v).toLocaleString("ru-RU")} шт`,
+            color: "#94a3b8"
+          },
+          grid: { display: false }
         },
         yPct: {
           type: "linear",

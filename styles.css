@@ -856,3 +856,27 @@ tbody tr.cashflow-current {
   background: var(--legend-color, #94a3b8);
   flex-shrink: 0;
 }
+
+.chart-legend-dot.dot-line {
+  border-radius: 2px;
+  height: 3px;
+  width: 14px;
+}
+
+.chart-legend-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chart-legend-divider {
+  width: 100%;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
