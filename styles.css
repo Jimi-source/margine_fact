@@ -646,6 +646,19 @@ thead th {
   font-weight: 700;
 }
 
+#resultTable th:first-child,
+#resultTable td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+
+#resultTable thead th:first-child {
+  z-index: 2;
+  background: var(--surface-muted);
+}
+
 tbody tr:hover {
   background: rgba(79, 70, 229, 0.04);
 }
