@@ -1,56 +1,76 @@
 let marginChartInstance = null;
+const chartVisibility = {};
 
-const CHART_DATASETS = [
+// Статические показатели (всегда есть в summary)
+const STATIC_DATASETS = [
   {
-    key: "revenueBeforeTax",
-    label: "Выручка",
-    color: "rgba(99, 179, 237, 0.85)",
-    border: "rgb(49, 130, 206)",
+    key: "totalQty",
+    label: "Кол-во доставлено",
+    color: "rgba(148,163,184,0.7)",
+    border: "rgb(100,116,139)",
     yAxis: "yRub",
     type: "bar",
-    order: 2
+    order: 3
   },
   {
     key: "totalCost",
-    label: "Себестоимость",
-    color: "rgba(252, 129, 74, 0.85)",
-    border: "rgb(221, 72, 20)",
+    label: "Сумма себестоимости",
+    color: "rgba(252,129,74,0.85)",
+    border: "rgb(221,72,20)",
     yAxis: "yRub",
     type: "bar",
-    order: 2
+    order: 3
   },
   {
     key: "otherServicesTotal",
     label: "Прочие услуги",
-    color: "rgba(167, 139, 250, 0.85)",
-    border: "rgb(124, 58, 237)",
+    color: "rgba(167,139,250,0.85)",
+    border: "rgb(124,58,237)",
     yAxis: "yRub",
     type: "bar",
-    order: 2
+    order: 3
   },
   {
     key: "totalAds",
     label: "Реклама",
-    color: "rgba(251, 191, 36, 0.85)",
-    border: "rgb(217, 119, 6)",
+    color: "rgba(251,191,36,0.85)",
+    border: "rgb(217,119,6)",
     yAxis: "yRub",
     type: "bar",
-    order: 2
+    order: 3
+  },
+  {
+    key: "totalAccrual",
+    label: "Начисления",
+    color: "rgba(99,179,237,0.7)",
+    border: "rgb(49,130,206)",
+    yAxis: "yRub",
+    type: "bar",
+    order: 3
+  },
+  {
+    key: "revenueBeforeTax",
+    label: "Выручка",
+    color: "rgba(52,211,153,0.7)",
+    border: "rgb(16,185,129)",
+    yAxis: "yRub",
+    type: "bar",
+    order: 3
   },
   {
     key: "totalCancelSum",
     label: "Сумма отмен",
-    color: "rgba(248, 113, 113, 0.85)",
-    border: "rgb(220, 38, 38)",
+    color: "rgba(248,113,113,0.85)",
+    border: "rgb(220,38,38)",
     yAxis: "yRub",
     type: "bar",
-    order: 2
+    order: 3
   },
   {
     key: "marginBeforeTax",
     label: "Маржа, %",
-    color: "rgba(52, 211, 153, 1)",
-    border: "rgb(16, 185, 129)",
+    color: "rgba(52,211,153,1)",
+    border: "rgb(16,185,129)",
     yAxis: "yPct",
     type: "line",
     order: 1,
@@ -59,8 +79,8 @@ const CHART_DATASETS = [
   {
     key: "summaryMarginWithoutCancel",
     label: "Маржа без отмен, %",
-    color: "rgba(34, 211, 238, 1)",
-    border: "rgb(6, 182, 212)",
+    color: "rgba(34,211,238,1)",
+    border: "rgb(6,182,212)",
     yAxis: "yPct",
     type: "line",
     order: 1,
@@ -68,10 +88,15 @@ const CHART_DATASETS = [
   }
 ];
 
-const chartVisibility = {};
-CHART_DATASETS.forEach((ds) => {
-  chartVisibility[ds.key] = true;
-});
+// Цвета для динамических групп начислений
+const GROUP_COLORS = [
+  { color: "rgba(99,179,237,0.55)", border: "rgb(49,130,206)" },
+  { color: "rgba(167,139,250,0.55)", border: "rgb(124,58,237)" },
+  { color: "rgba(251,191,36,0.55)", border: "rgb(217,119,6)" },
+  { color: "rgba(248,113,113,0.55)", border: "rgb(220,38,38)" },
+  { color: "rgba(52,211,153,0.55)", border: "rgb(16,185,129)" },
+  { color: "rgba(148,163,184,0.55)", border: "rgb(100,116,139)" }
+];
 
 function initChartYearSelect() {
   const select = document.getElementById("chartYear");
@@ -87,25 +112,55 @@ function initChartYearSelect() {
   }
 }
 
-function getChartData() {
-  const yearSelect = document.getElementById("chartYear");
-  const granSelect = document.getElementById("chartGranularity");
-  const year = yearSelect ? Number(yearSelect.value) : new Date().getFullYear();
-  const granularity = granSelect ? granSelect.value : "week";
-  const periods = buildCashflowPeriods(year, granularity);
+// Собирает динамические группы (totalByGroup) из всех сохранённых периодов
+function getKnownGroups(periods) {
+  const groups = new Set();
+  periods.forEach((period) => {
+    const entry = getCashflowEntry(period.key);
+    const summary = entry.summary || {};
+    if (summary.totalByGroup) {
+      Object.keys(summary.totalByGroup).forEach((g) => groups.add(g));
+    }
+  });
+  return Array.from(groups).sort();
+}
 
+function buildAllDatasets(knownGroups) {
+  const groupDatasets = knownGroups.map((group, i) => {
+    const c = GROUP_COLORS[i % GROUP_COLORS.length];
+    return {
+      key: `group__${group}`,
+      groupName: group,
+      label: getGroupLabel(group),
+      color: c.color,
+      border: c.border,
+      yAxis: "yRub",
+      type: "bar",
+      order: 2
+    };
+  });
+  return [...groupDatasets, ...STATIC_DATASETS];
+}
+
+function getChartData(allDatasets, periods) {
   const labels = [];
   const dataByKey = {};
-  CHART_DATASETS.forEach((ds) => { dataByKey[ds.key] = []; });
+  allDatasets.forEach((ds) => { dataByKey[ds.key] = []; });
 
   periods.forEach((period) => {
     const entry = getCashflowEntry(period.key);
     const summary = entry.summary || {};
-    if (!Number.isFinite(summary.marginBeforeTax) && !Number.isFinite(entry.marginBeforeTax)) return;
+    const hasMeta = Number.isFinite(summary.marginBeforeTax) || Number.isFinite(entry.marginBeforeTax);
+    if (!hasMeta) return;
 
     labels.push(period.label);
-    CHART_DATASETS.forEach((ds) => {
-      const raw = summary[ds.key] !== undefined ? summary[ds.key] : entry[ds.key];
+    allDatasets.forEach((ds) => {
+      let raw;
+      if (ds.groupName !== undefined) {
+        raw = summary.totalByGroup ? (summary.totalByGroup[ds.groupName] || 0) : null;
+      } else {
+        raw = summary[ds.key] !== undefined ? summary[ds.key] : entry[ds.key];
+      }
       const val = Number.isFinite(raw) ? raw : null;
       const scaled = val !== null && ds.isPercent ? Math.round(val * 10000) / 100 : val;
       dataByKey[ds.key].push(scaled !== null ? Math.round(scaled * 100) / 100 : null);
@@ -115,10 +170,16 @@ function getChartData() {
   return { labels, dataByKey };
 }
 
-function renderChartLegend() {
+function renderChartLegend(allDatasets) {
   const container = document.getElementById("chartLegend");
   if (!container) return;
-  container.innerHTML = CHART_DATASETS.map((ds) => {
+
+  // Инициализируем видимость для новых ключей
+  allDatasets.forEach((ds) => {
+    if (chartVisibility[ds.key] === undefined) chartVisibility[ds.key] = true;
+  });
+
+  container.innerHTML = allDatasets.map((ds) => {
     const active = chartVisibility[ds.key];
     return `
       <button
@@ -138,7 +199,7 @@ function renderChartLegend() {
       chartVisibility[key] = !chartVisibility[key];
       btn.classList.toggle("active", chartVisibility[key]);
       if (marginChartInstance) {
-        const idx = CHART_DATASETS.findIndex((d) => d.key === key);
+        const idx = marginChartInstance.data.datasets.findIndex((d) => d._key === key);
         if (idx !== -1) {
           marginChartInstance.data.datasets[idx].hidden = !chartVisibility[key];
           marginChartInstance.update();
@@ -153,7 +214,18 @@ function renderMarginChart() {
   const statusEl = document.getElementById("chartStatus");
   if (!canvas) return;
 
-  const { labels, dataByKey } = getChartData();
+  const yearSelect = document.getElementById("chartYear");
+  const granSelect = document.getElementById("chartGranularity");
+  const year = yearSelect ? Number(yearSelect.value) : new Date().getFullYear();
+  const granularity = granSelect ? granSelect.value : "week";
+  const periods = buildCashflowPeriods(year, granularity);
+
+  const knownGroups = getKnownGroups(periods);
+  const allDatasets = buildAllDatasets(knownGroups);
+
+  const { labels, dataByKey } = getChartData(allDatasets, periods);
+
+  renderChartLegend(allDatasets);
 
   if (labels.length === 0) {
     if (statusEl) statusEl.textContent = "Нет данных. Сначала рассчитайте периоды во вкладке Cashflow.";
@@ -165,7 +237,8 @@ function renderMarginChart() {
   }
   if (statusEl) statusEl.textContent = "";
 
-  const datasets = CHART_DATASETS.map((ds) => ({
+  const datasets = allDatasets.map((ds) => ({
+    _key: ds.key,
     label: ds.label,
     data: dataByKey[ds.key],
     backgroundColor: ds.color,
@@ -196,10 +269,7 @@ function renderMarginChart() {
     options: {
       responsive: true,
       maintainAspectRatio: true,
-      interaction: {
-        mode: "index",
-        intersect: false
-      },
+      interaction: { mode: "index", intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -211,12 +281,13 @@ function renderMarginChart() {
           padding: 12,
           callbacks: {
             label: (ctx) => {
-              if (ctx.parsed.y === null) return null;
-              const ds = CHART_DATASETS[ctx.datasetIndex];
+              if (ctx.parsed.y === null || ctx.dataset.hidden) return null;
+              const ds = allDatasets[ctx.datasetIndex];
               const val = ctx.parsed.y;
+              if (!ds) return null;
               return ds.isPercent
                 ? ` ${ctx.dataset.label}: ${val.toFixed(2)} %`
-                : ` ${ctx.dataset.label}: ${val.toLocaleString("ru-RU")} ₽`;
+                : ` ${ctx.dataset.label}: ${Number(val).toLocaleString("ru-RU")} ${ds.key === "totalQty" ? "шт" : "₽"}`;
             }
           }
         }
@@ -257,7 +328,6 @@ function renderMarginChart() {
 
 function setupChartTab() {
   initChartYearSelect();
-  renderChartLegend();
 
   const yearSelect = document.getElementById("chartYear");
   const granSelect = document.getElementById("chartGranularity");

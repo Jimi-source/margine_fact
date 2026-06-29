@@ -414,6 +414,11 @@ function calculateReport(payload) {
   const totalAccrual = rows.reduce((sum, row) => sum + row.accrual, 0);
   const totalAds = rows.reduce((sum, row) => sum + row.ads, 0);
   const totalCancelSum = rows.reduce((sum, row) => sum + row.cancelSum, 0);
+  const totalQty = rows.reduce((sum, row) => sum + row.qty, 0);
+  const totalByGroup = {};
+  accrualGroups.forEach((group) => {
+    totalByGroup[group] = rows.reduce((sum, row) => sum + (row.accrualByGroup[group] || 0), 0);
+  });
   const revenueBeforeTax = totalAccrual + otherServicesTotal - totalAds;
 
   const tax9 = realizTotal * 0.09;
@@ -447,7 +452,9 @@ function calculateReport(payload) {
     netWithTax5,
     marginAfterTax5,
     totalCancelSum,
-    summaryMarginWithoutCancel
+    summaryMarginWithoutCancel,
+    totalQty,
+    totalByGroup
   };
 
   return {
