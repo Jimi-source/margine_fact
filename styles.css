@@ -815,3 +815,44 @@ tbody tr.cashflow-current {
   width: 100%;
   margin-top: 1rem;
 }
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 1rem;
+}
+
+.chart-legend-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1.5px solid var(--legend-color, #94a3b8);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+  opacity: 0.45;
+}
+
+.chart-legend-btn.active {
+  background: color-mix(in srgb, var(--legend-color, #94a3b8) 12%, transparent);
+  color: var(--text);
+  opacity: 1;
+}
+
+.chart-legend-btn:hover {
+  opacity: 0.85;
+}
+
+.chart-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--legend-color, #94a3b8);
+  flex-shrink: 0;
+}
