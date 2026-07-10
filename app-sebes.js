@@ -218,6 +218,27 @@ async function saveUserSebes() {
   }
 }
 
+function getSebesCacheKey(user) {
+  return `sebes_cache_${(user && user.email) || ""}`;
+}
+
+function saveSebesCache(user, items) {
+  try {
+    localStorage.setItem(getSebesCacheKey(user), JSON.stringify(items));
+  } catch (_) {}
+}
+
+function loadSebesCache(user) {
+  try {
+    const raw = localStorage.getItem(getSebesCacheKey(user));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 async function loadUserSebes(user) {
   if (!user) {
     state.sebes = [];
@@ -230,16 +251,26 @@ async function loadUserSebes(user) {
   try {
     const data = await apiRequest("/sebes");
     const items = Array.isArray(data.items) ? data.items : [];
-    state.sebes = items.length > 0 ? items : [];
+    state.sebes = items;
     state.sebesDirty = false;
+    if (items.length > 0) saveSebesCache(user, items);
     renderSebesTable(state.sebes);
     updateSebesActions();
     setSebesStatus(items.length > 0 ? "Данные загружены." : "Нет сохранённых данных.");
   } catch (error) {
-    state.sebes = [];
-    state.sebesDirty = false;
-    renderSebesTable(state.sebes);
-    updateSebesActions();
-    setSebesStatus("Не удалось загрузить себестоимость.", true);
+    const cached = loadSebesCache(user);
+    if (cached && cached.length > 0) {
+      state.sebes = cached;
+      state.sebesDirty = false;
+      renderSebesTable(state.sebes);
+      updateSebesActions();
+      setSebesStatus("Не удалось связаться с сервером — показаны сохранённые данные.", true);
+    } else {
+      state.sebes = [];
+      state.sebesDirty = false;
+      renderSebesTable(state.sebes);
+      updateSebesActions();
+      setSebesStatus("Не удалось загрузить себестоимость.", true);
+    }
   }
 }
