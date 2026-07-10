@@ -70,9 +70,11 @@ async function calculateRemote() {
     });
   }
 
-  // Применяем пересчитанные прошлые периоды
+  // Применяем пересчитанные прошлые периоды (текущий пропускаем — у него только что сохранён свежий расчёт)
+  const currentKey = matchedPeriod ? matchedPeriod.key : null;
   const updatedEntries = data.updatedCashflowEntries || {};
   for (const [key, entry] of Object.entries(updatedEntries)) {
+    if (key === currentKey) continue;
     if (state.cashflow.entries[key]) {
       state.cashflow.entries[key] = {
         ...state.cashflow.entries[key],
