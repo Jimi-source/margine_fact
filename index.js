@@ -981,7 +981,12 @@ app.post("/generateReport", async (req, res) => {
 // Пересчитывает трафаретную часть одного cashflow-entry используя актуальный реестр
 function recalcEntryStencil(entry, spendRegistry, orderRegistry) {
   const counts = entry.stencilOrderCountsInPeriod;
-  const oldStencilByArticle = entry.stencilAdsByArticle || {};
+  // Нормализуем: исторически могло сохраниться как {stencil: X, pvp: Y}, берём только stencil
+  const rawOld = entry.stencilAdsByArticle || {};
+  const oldStencilByArticle = {};
+  for (const [a, v] of Object.entries(rawOld)) {
+    oldStencilByArticle[a] = typeof v === "object" && v !== null ? (v.stencil || 0) : (Number(v) || 0);
+  }
   if (!counts || Object.keys(counts).length === 0) return null;
 
   const newStencilByArticle = {};
@@ -995,22 +1000,31 @@ function recalcEntryStencil(entry, spendRegistry, orderRegistry) {
     newStencilByArticle[article] = (newStencilByArticle[article] || 0) + newStencilForPeriod;
   }
 
-  // Считаем дельту
-  let deltaAds = 0;
+  // Считаем дельту от стенсил-части
+  let deltaStencil = 0;
   const allArticles = new Set([
     ...Object.keys(oldStencilByArticle),
     ...Object.keys(newStencilByArticle)
   ]);
   for (const article of allArticles) {
-    deltaAds += (newStencilByArticle[article] || 0) - (oldStencilByArticle[article] || 0);
+    deltaStencil += (newStencilByArticle[article] || 0) - (oldStencilByArticle[article] || 0);
   }
 
-  if (Math.abs(deltaAds) < 0.01) return null; // изменение незначительное
+  if (Math.abs(deltaStencil) < 0.01) return null; // изменение незначительное
 
   const summary = entry.summary;
   if (!summary) return null;
 
-  const newTotalAds = (summary.totalAds || 0) + deltaAds;
+  // Вычисляем pvp-составляющую из сохранённого pvpAdsByArticle, затем перестраиваем totalAds абсолютно
+  const pvpByArticle = entry.pvpAdsByArticle || {};
+  const totalPvp = Object.values(pvpByArticle).reduce((s, v) => s + (Number(v) || 0), 0);
+  const oldTotalStencil = Object.values(oldStencilByArticle).reduce((s, v) => s + v, 0);
+  const newTotalStencil = Object.values(newStencilByArticle).reduce((s, v) => s + v, 0);
+
+  // Если pvpAdsByArticle не сохранён — откатываемся к дельта-методу
+  const newTotalAds = Object.keys(pvpByArticle).length > 0
+    ? totalPvp + newTotalStencil
+    : (summary.totalAds || 0) - oldTotalStencil + newTotalStencil;
   const newRevenueBeforeTax = (summary.totalAccrual || 0) + (summary.otherServicesTotal || 0) - newTotalAds;
   const newMarginBeforeTax = newRevenueBeforeTax > 0
     ? (newRevenueBeforeTax - (summary.totalCost || 0)) / newRevenueBeforeTax

@@ -54,11 +54,19 @@ async function calculateRemote() {
   if (matchedPeriod) {
     state.cashflow.selectedKey = matchedPeriod.key;
     const stencilData = data.stencilData || {};
+    // Разбиваем adsByArticle на stencil и pvp как plain-числа
+    const stencilOnlyByArticle = {};
+    const pvpOnlyByArticle = {};
+    for (const [a, v] of Object.entries(stencilData.adsByArticle || {})) {
+      stencilOnlyByArticle[a] = typeof v === "object" ? (v.stencil || 0) : (v || 0);
+      pvpOnlyByArticle[a] = typeof v === "object" ? (v.pvp || 0) : 0;
+    }
     setCashflowEntry(matchedPeriod.key, {
       marginBeforeTax: summary.marginBeforeTax,
       summary,
       stencilOrderCountsInPeriod: stencilData.orderCountsInPeriod || {},
-      stencilAdsByArticle: stencilData.adsByArticle || {}
+      stencilAdsByArticle: stencilOnlyByArticle,
+      pvpAdsByArticle: pvpOnlyByArticle
     });
   }
 
