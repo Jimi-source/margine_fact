@@ -359,6 +359,11 @@ function calculateReport(payload) {
       pvpAdsByArticle.set(article, (pvpAdsByArticle.get(article) || 0) + pvpValue);
     }
 
+    // DEBUG: log rows with stencil match
+    if (stencilSum > 0 && article) {
+      console.log(`[STENCIL_DEBUG] article=${article} statusScore=${statusScore} stencilSum=${stencilSum.toFixed(2)} count=${count} stencilValue=${stencilValue.toFixed(2)} date=${dateKey(accrualDateValue)} orderId=${orderOrShipmentId}`);
+    }
+
     // Накапливаем кол-во строк начислений по (article, date) для строк с трафаретом
     if (article && stencilSum > 0) {
       const skuName = String(name || "").trim();
