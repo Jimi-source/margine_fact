@@ -901,29 +901,33 @@ app.post("/generateReport", async (req, res) => {
         );
       }
 
-      // 2. Increment stencil_order_registry
+      // 2. Upsert stencil_order_registry (SET, не INCREMENT — идемпотентно по расчётному периоду)
+      const periodStart = payload.startDate;
+      const periodEnd = payload.endDate;
       for (const [periodKey, { count, skuName }] of Object.entries(stencilData.orderCountsInPeriod || {})) {
         const sepIdx = periodKey.indexOf("__");
         if (sepIdx < 0) continue;
         const article = periodKey.slice(0, sepIdx);
         const dateStr = periodKey.slice(sepIdx + 2);
         await pool.query(
-          `INSERT INTO stencil_order_registry(user_id, date, article, sku_name, total_count)
-           VALUES($1, $2, $3, $4, $5)
-           ON CONFLICT (user_id, date, article) DO UPDATE
-             SET total_count = stencil_order_registry.total_count + EXCLUDED.total_count,
+          `INSERT INTO stencil_order_registry(user_id, period_start, period_end, date, article, sku_name, total_count)
+           VALUES($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (user_id, period_start, period_end, date, article) DO UPDATE
+             SET total_count = EXCLUDED.total_count,
                  sku_name = EXCLUDED.sku_name`,
-          [userId, dateStr, article, skuName, count]
+          [userId, periodStart, periodEnd, dateStr, article, skuName, count]
         );
       }
 
-      // 3. Загружаем актуальный реестр для пересчёта
+      // 3. Загружаем актуальный реестр для пересчёта (SUM по всем расчётным периодам)
       const { rows: spendRows } = await pool.query(
         `SELECT date, sku_name, total_spend FROM stencil_spend_registry WHERE user_id=$1`,
         [userId]
       );
       const { rows: orderRows } = await pool.query(
-        `SELECT date, article, total_count FROM stencil_order_registry WHERE user_id=$1`,
+        `SELECT date, article, SUM(total_count)::int as total_count
+         FROM stencil_order_registry WHERE user_id=$1
+         GROUP BY date, article`,
         [userId]
       );
       const spendRegistry = {};
@@ -987,7 +991,16 @@ app.post("/generateReport", async (req, res) => {
         };
         const recalcedCurrent = recalcEntryStencil(currentEntry, spendRegistry, orderRegistry);
         if (recalcedCurrent) {
-          result = { ...result, summary: recalcedCurrent.summary };
+          // Обновляем summary и stencilData.adsByArticle корректированными значениями
+          const correctedAdsByArticle = {};
+          for (const [a, stencil] of Object.entries(recalcedCurrent.stencilAdsByArticle || {})) {
+            correctedAdsByArticle[a] = { stencil, pvp: pvpOnly[a] || 0 };
+          }
+          result = {
+            ...result,
+            summary: recalcedCurrent.summary,
+            stencilData: { ...stencilData, adsByArticle: correctedAdsByArticle }
+          };
         }
       }
     } catch (recalcErr) {
@@ -1083,14 +1096,24 @@ async function initDb() {
       PRIMARY KEY (user_id, date, sku_name)
     )
   `);
+  // Мигрируем: если старая таблица без period_start — пересоздаём
+  const { rows: cols } = await pool.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name='stencil_order_registry' AND column_name='period_start'
+  `);
+  if (cols.length === 0) {
+    await pool.query(`DROP TABLE IF EXISTS stencil_order_registry`);
+  }
   await pool.query(`
     CREATE TABLE IF NOT EXISTS stencil_order_registry (
       user_id TEXT NOT NULL,
+      period_start DATE NOT NULL,
+      period_end DATE NOT NULL,
       date DATE NOT NULL,
       article TEXT NOT NULL,
       sku_name TEXT NOT NULL,
       total_count INT NOT NULL DEFAULT 0,
-      PRIMARY KEY (user_id, date, article)
+      PRIMARY KEY (user_id, period_start, period_end, date, article)
     )
   `);
 }
