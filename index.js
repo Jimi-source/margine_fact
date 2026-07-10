@@ -1036,6 +1036,7 @@ function recalcEntryStencil(entry, spendRegistry, orderRegistry) {
 
   return {
     ...entry,
+    marginBeforeTax: newMarginBeforeTax,
     stencilAdsByArticle: newStencilByArticle,
     summary: {
       ...summary,
