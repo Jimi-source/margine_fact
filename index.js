@@ -996,6 +996,20 @@ app.post("/generateReport", async (req, res) => {
           pvpAdsByArticle: pvpOnly,
           summary: result.summary
         };
+        console.log(`[RECALC_DEBUG] stencilOnly=${JSON.stringify(stencilOnly)}`);
+        console.log(`[RECALC_DEBUG] orderCountsInPeriod keys=${Object.keys(stencilData.orderCountsInPeriod || {}).length}`);
+        console.log(`[RECALC_DEBUG] spendRegistry size=${Object.keys(spendRegistry).length}, orderRegistry size=${Object.keys(orderRegistry).length}`);
+        // Пример первого ключа из orderCountsInPeriod чтобы проверить формат
+        const firstOCKey = Object.keys(stencilData.orderCountsInPeriod || {})[0];
+        if (firstOCKey) {
+          const sepIdx2 = firstOCKey.indexOf("__");
+          const art2 = firstOCKey.slice(0, sepIdx2);
+          const dt2 = firstOCKey.slice(sepIdx2 + 2);
+          const { count: cnt2, skuName: sku2 } = stencilData.orderCountsInPeriod[firstOCKey];
+          const spk2 = `${dt2}__${sku2}`;
+          const ork2 = `${art2}__${dt2}`;
+          console.log(`[RECALC_DEBUG] sample key=${firstOCKey} spendKey=${spk2} spendVal=${spendRegistry[spk2]} orderKey=${ork2} orderVal=${orderRegistry[ork2]} count=${cnt2}`);
+        }
         const recalcedCurrent = recalcEntryStencil(currentEntry, spendRegistry, orderRegistry);
         if (recalcedCurrent) {
           // Обновляем summary и stencilData.adsByArticle корректированными значениями
