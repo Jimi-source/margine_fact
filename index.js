@@ -869,7 +869,7 @@ app.post("/generateReport", async (req, res) => {
       return res.status(402).json({ ok: false, error: "Недостаточно токенов." });
     }
 
-    const result = calculateReport(req.body || {});
+    let result = calculateReport(req.body || {});
     let creditsLeft = credits;
     if (role !== "owner") {
       creditsLeft = creditsLeft - 1;
