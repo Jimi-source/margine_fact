@@ -937,11 +937,9 @@ app.post("/generateReport", async (req, res) => {
          GROUP BY date, article`,
         [userId]
       );
-      const spendRegistry = {};
       for (const r of spendRows) {
         spendRegistry[`${r.date.toISOString().slice(0,10)}__${r.sku_name}`] = Number(r.total_spend);
       }
-      const orderRegistry = {};
       for (const r of orderRows) {
         orderRegistry[`${r.article}__${r.date.toISOString().slice(0,10)}`] = Number(r.total_count);
       }
