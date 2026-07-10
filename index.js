@@ -969,6 +969,31 @@ app.post("/generateReport", async (req, res) => {
       console.error("Stencil registry error (non-fatal):", stencilErr.message);
     }
 
+    // Пересчитываем текущий период по реестру (чтобы скорректировать хвосты старых дат)
+    try {
+      const { stencilData } = result;
+      if (stencilData && Object.keys(stencilData.orderCountsInPeriod || {}).length > 0) {
+        const stencilOnly = {};
+        const pvpOnly = {};
+        for (const [a, v] of Object.entries(stencilData.adsByArticle || {})) {
+          stencilOnly[a] = typeof v === "object" ? (v.stencil || 0) : (v || 0);
+          pvpOnly[a] = typeof v === "object" ? (v.pvp || 0) : 0;
+        }
+        const currentEntry = {
+          stencilOrderCountsInPeriod: stencilData.orderCountsInPeriod,
+          stencilAdsByArticle: stencilOnly,
+          pvpAdsByArticle: pvpOnly,
+          summary: result.summary
+        };
+        const recalcedCurrent = recalcEntryStencil(currentEntry, spendRegistry, orderRegistry);
+        if (recalcedCurrent) {
+          result = { ...result, summary: recalcedCurrent.summary };
+        }
+      }
+    } catch (recalcErr) {
+      console.error("Current period recalc error (non-fatal):", recalcErr.message);
+    }
+
     res.json({ ok: true, creditsLeft, ...result, updatedCashflowEntries });
   } catch (e) {
     await client.query("ROLLBACK");
