@@ -883,6 +883,8 @@ app.post("/generateReport", async (req, res) => {
 
     // Обновляем реестр трафаретов и пересчитываем прошлые периоды (вне транзакции)
     const updatedCashflowEntries = {};
+    let spendRegistry = {};
+    let orderRegistry = {};
     try {
       const userId = getUserId(user);
       const { stencilData } = result;
@@ -902,8 +904,8 @@ app.post("/generateReport", async (req, res) => {
       }
 
       // 2. Upsert stencil_order_registry (SET, не INCREMENT — идемпотентно по расчётному периоду)
-      const periodStart = payload.startDate;
-      const periodEnd = payload.endDate;
+      const periodStart = req.body.startDate;
+      const periodEnd = req.body.endDate;
       for (const [periodKey, { count, skuName }] of Object.entries(stencilData.orderCountsInPeriod || {})) {
         const sepIdx = periodKey.indexOf("__");
         if (sepIdx < 0) continue;
