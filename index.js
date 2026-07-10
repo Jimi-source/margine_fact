@@ -27,7 +27,7 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: "50mb" }));
+app.use(express.json({ limit: "200mb" }));
 
 const pool = new Pool({
   host: process.env.DB_HOST,
@@ -236,6 +236,12 @@ function calculateReport(payload) {
   const pvpSumByOrderArticle = buildPvpSumByOrderArticle(payload.pvp || []);
   const stencilSumByKey = buildStencilSumByDateName(payload.stencils || []);
 
+  // Для реестра трафаретов
+  const stencilAdsByArticle = new Map();
+  const pvpAdsByArticle = new Map();
+  // article__date → { count, skuName } — только для строк где есть трафарет
+  const stencilOrderCountsInPeriod = new Map();
+
   const orderStatusByOrder = new Map();
   const orderStatusByShipment = new Map();
   const orderCountByOrderArticle = new Map();
@@ -349,6 +355,16 @@ function calculateReport(payload) {
 
     if (statusScore === 1 && article) {
       adsByArticle.set(article, (adsByArticle.get(article) || 0) + adsValue);
+      stencilAdsByArticle.set(article, (stencilAdsByArticle.get(article) || 0) + stencilValue);
+      pvpAdsByArticle.set(article, (pvpAdsByArticle.get(article) || 0) + pvpValue);
+    }
+
+    // Накапливаем кол-во строк начислений по (article, date) для строк с трафаретом
+    if (article && stencilSum > 0) {
+      const skuName = String(name || "").trim();
+      const periodKey = `${article}__${dateKey(accrualDateValue)}`;
+      const existing = stencilOrderCountsInPeriod.get(periodKey) || { count: 0, skuName };
+      stencilOrderCountsInPeriod.set(periodKey, { count: existing.count + 1, skuName });
     }
 
     const isCancelled = statusByOrder === "Отменён" || statusByShipment === "Отменён";
@@ -457,11 +473,26 @@ function calculateReport(payload) {
     totalByGroup
   };
 
+  // Данные для реестра трафаретов
+  const stencilData = {
+    spendByKey: Object.fromEntries(stencilSumByKey),
+    orderCountsInPeriod: Object.fromEntries(
+      Array.from(stencilOrderCountsInPeriod.entries()).map(([k, v]) => [k, v])
+    ),
+    adsByArticle: Object.fromEntries(
+      Array.from(stencilAdsByArticle.entries()).map(([a, s]) => [
+        a,
+        { stencil: s, pvp: pvpAdsByArticle.get(a) || 0 }
+      ])
+    )
+  };
+
   return {
     summary,
     rows,
     missingCosts: Array.from(missingCosts),
-    accrualGroups
+    accrualGroups,
+    stencilData
   };
 }
 
@@ -849,7 +880,96 @@ app.post("/generateReport", async (req, res) => {
     }
 
     await client.query("COMMIT");
-    res.json({ ok: true, creditsLeft, ...result });
+
+    // Обновляем реестр трафаретов и пересчитываем прошлые периоды (вне транзакции)
+    const updatedCashflowEntries = {};
+    try {
+      const userId = getUserId(user);
+      const { stencilData } = result;
+
+      // 1. Upsert stencil_spend_registry
+      for (const [key, spend] of Object.entries(stencilData.spendByKey || {})) {
+        const sepIdx = key.indexOf("__");
+        if (sepIdx < 0) continue;
+        const dateStr = key.slice(0, sepIdx);
+        const skuName = key.slice(sepIdx + 2);
+        await pool.query(
+          `INSERT INTO stencil_spend_registry(user_id, date, sku_name, total_spend)
+           VALUES($1, $2, $3, $4)
+           ON CONFLICT (user_id, date, sku_name) DO UPDATE SET total_spend = EXCLUDED.total_spend`,
+          [userId, dateStr, skuName, spend]
+        );
+      }
+
+      // 2. Increment stencil_order_registry
+      for (const [periodKey, { count, skuName }] of Object.entries(stencilData.orderCountsInPeriod || {})) {
+        const sepIdx = periodKey.indexOf("__");
+        if (sepIdx < 0) continue;
+        const article = periodKey.slice(0, sepIdx);
+        const dateStr = periodKey.slice(sepIdx + 2);
+        await pool.query(
+          `INSERT INTO stencil_order_registry(user_id, date, article, sku_name, total_count)
+           VALUES($1, $2, $3, $4, $5)
+           ON CONFLICT (user_id, date, article) DO UPDATE
+             SET total_count = stencil_order_registry.total_count + EXCLUDED.total_count,
+                 sku_name = EXCLUDED.sku_name`,
+          [userId, dateStr, article, skuName, count]
+        );
+      }
+
+      // 3. Загружаем актуальный реестр для пересчёта
+      const { rows: spendRows } = await pool.query(
+        `SELECT date, sku_name, total_spend FROM stencil_spend_registry WHERE user_id=$1`,
+        [userId]
+      );
+      const { rows: orderRows } = await pool.query(
+        `SELECT date, article, total_count FROM stencil_order_registry WHERE user_id=$1`,
+        [userId]
+      );
+      const spendRegistry = {};
+      for (const r of spendRows) {
+        spendRegistry[`${r.date.toISOString().slice(0,10)}__${r.sku_name}`] = Number(r.total_spend);
+      }
+      const orderRegistry = {};
+      for (const r of orderRows) {
+        orderRegistry[`${r.article}__${r.date.toISOString().slice(0,10)}`] = Number(r.total_count);
+      }
+
+      // 4. Загружаем все cashflow-периоды пользователя и пересчитываем затронутые
+      const currentYear = new Date().getFullYear();
+      for (const year of [currentYear - 1, currentYear]) {
+        const { rows: cfRows } = await pool.query(
+          `SELECT entries, tax_rate FROM cashflow WHERE user_id=$1 AND year=$2`,
+          [userId, year]
+        );
+        if (!cfRows.length) continue;
+
+        const entries = cfRows[0].entries || {};
+        let changed = false;
+
+        for (const [key, entry] of Object.entries(entries)) {
+          if (entry.locked) continue;
+          if (!entry.stencilOrderCountsInPeriod) continue;
+          const updated = recalcEntryStencil(entry, spendRegistry, orderRegistry);
+          if (updated) {
+            entries[key] = updated;
+            updatedCashflowEntries[key] = updated;
+            changed = true;
+          }
+        }
+
+        if (changed) {
+          await pool.query(
+            `UPDATE cashflow SET entries=$1, updated_at=now() WHERE user_id=$2 AND year=$3`,
+            [JSON.stringify(entries), userId, year]
+          );
+        }
+      }
+    } catch (stencilErr) {
+      console.error("Stencil registry error (non-fatal):", stencilErr.message);
+    }
+
+    res.json({ ok: true, creditsLeft, ...result, updatedCashflowEntries });
   } catch (e) {
     await client.query("ROLLBACK");
     res.status(400).json({ ok: false, error: e.message });
@@ -857,6 +977,85 @@ app.post("/generateReport", async (req, res) => {
     client.release();
   }
 });
+
+// Пересчитывает трафаретную часть одного cashflow-entry используя актуальный реестр
+function recalcEntryStencil(entry, spendRegistry, orderRegistry) {
+  const counts = entry.stencilOrderCountsInPeriod;
+  const oldStencilByArticle = entry.stencilAdsByArticle || {};
+  if (!counts || Object.keys(counts).length === 0) return null;
+
+  const newStencilByArticle = {};
+  for (const [periodKey, { count: periodCount, skuName }] of Object.entries(counts)) {
+    const [article, dateStr] = periodKey.split("__");
+    const spendKey = `${dateStr}__${skuName}`;
+    const totalSpend = spendRegistry[spendKey] || 0;
+    const totalOrders = orderRegistry[`${article}__${dateStr}`] || periodCount;
+    const newStencilPerRow = totalOrders > 0 ? totalSpend / totalOrders : 0;
+    const newStencilForPeriod = periodCount * newStencilPerRow;
+    newStencilByArticle[article] = (newStencilByArticle[article] || 0) + newStencilForPeriod;
+  }
+
+  // Считаем дельту
+  let deltaAds = 0;
+  const allArticles = new Set([
+    ...Object.keys(oldStencilByArticle),
+    ...Object.keys(newStencilByArticle)
+  ]);
+  for (const article of allArticles) {
+    deltaAds += (newStencilByArticle[article] || 0) - (oldStencilByArticle[article] || 0);
+  }
+
+  if (Math.abs(deltaAds) < 0.01) return null; // изменение незначительное
+
+  const summary = entry.summary;
+  if (!summary) return null;
+
+  const newTotalAds = (summary.totalAds || 0) + deltaAds;
+  const newRevenueBeforeTax = (summary.totalAccrual || 0) + (summary.otherServicesTotal || 0) - newTotalAds;
+  const newMarginBeforeTax = newRevenueBeforeTax > 0
+    ? (newRevenueBeforeTax - (summary.totalCost || 0)) / newRevenueBeforeTax
+    : 0;
+  const newRevenueWithoutCancel = newRevenueBeforeTax - (summary.totalCancelSum || 0);
+  const newSummaryMarginWithoutCancel = newRevenueWithoutCancel > 0
+    ? (newRevenueWithoutCancel - (summary.totalCost || 0)) / newRevenueWithoutCancel
+    : 0;
+
+  return {
+    ...entry,
+    stencilAdsByArticle: newStencilByArticle,
+    summary: {
+      ...summary,
+      totalAds: newTotalAds,
+      revenueBeforeTax: newRevenueBeforeTax,
+      marginBeforeTax: newMarginBeforeTax,
+      summaryMarginWithoutCancel: newSummaryMarginWithoutCancel
+    }
+  };
+}
+
+async function initDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS stencil_spend_registry (
+      user_id TEXT NOT NULL,
+      date DATE NOT NULL,
+      sku_name TEXT NOT NULL,
+      total_spend NUMERIC NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, date, sku_name)
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS stencil_order_registry (
+      user_id TEXT NOT NULL,
+      date DATE NOT NULL,
+      article TEXT NOT NULL,
+      sku_name TEXT NOT NULL,
+      total_count INT NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, date, article)
+    )
+  `);
+}
+
+initDb().catch((e) => console.error("initDb error:", e));
 
 app.listen(3001, () => {
   console.log("API started on port 3001");

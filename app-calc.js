@@ -53,10 +53,28 @@ async function calculateRemote() {
   );
   if (matchedPeriod) {
     state.cashflow.selectedKey = matchedPeriod.key;
+    const stencilData = data.stencilData || {};
     setCashflowEntry(matchedPeriod.key, {
       marginBeforeTax: summary.marginBeforeTax,
-      summary
+      summary,
+      stencilOrderCountsInPeriod: stencilData.orderCountsInPeriod || {},
+      stencilAdsByArticle: stencilData.adsByArticle || {}
     });
+  }
+
+  // Применяем пересчитанные прошлые периоды
+  const updatedEntries = data.updatedCashflowEntries || {};
+  for (const [key, entry] of Object.entries(updatedEntries)) {
+    if (state.cashflow.entries[key]) {
+      state.cashflow.entries[key] = {
+        ...state.cashflow.entries[key],
+        ...entry,
+        updatedAt: new Date().toISOString()
+      };
+    }
+  }
+
+  if (matchedPeriod || Object.keys(updatedEntries).length > 0) {
     renderCashflowTable();
     updateCashflowActions();
     if (state.user) {
