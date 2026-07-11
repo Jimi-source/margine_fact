@@ -473,6 +473,28 @@ function calculateReport(payload) {
     totalByGroup
   };
 
+  // Данные для прогноза маржи (заказы в статусе "Доставляется")
+  const deliveringByArticle = new Map();
+  let cancelledCount = 0;
+  let deliveredCount = 0;
+  for (const row of payload.orders || []) {
+    const status = String(row["Статус"] || "").trim();
+    const article = String(row["Артикул"] || "").trim();
+    const qty = parseNumber(row["Количество"]) || 1;
+    if (article && status === "Доставляется") {
+      deliveringByArticle.set(article, (deliveringByArticle.get(article) || 0) + qty);
+    }
+    if (status === "Отменён") cancelledCount += qty;
+    if (status === "Доставлен") deliveredCount += qty;
+  }
+  const cancelRate = (deliveredCount + cancelledCount) > 0
+    ? cancelledCount / (deliveredCount + cancelledCount)
+    : 0;
+  const forecastData = {
+    deliveringByArticle: Object.fromEntries(deliveringByArticle),
+    cancelRate
+  };
+
   // Данные для реестра трафаретов
   const stencilData = {
     spendByKey: Object.fromEntries(stencilSumByKey),
@@ -492,7 +514,8 @@ function calculateReport(payload) {
     rows,
     missingCosts: Array.from(missingCosts),
     accrualGroups,
-    stencilData
+    stencilData,
+    forecastData
   };
 }
 

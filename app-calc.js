@@ -39,6 +39,7 @@ async function calculateRemote() {
   state.accrualGroups = Array.isArray(data.accrualGroups) ? data.accrualGroups : [];
   state.lastSummary = summary;
   state.lastRows = rows;
+  state.forecastData = data.forecastData || null;
   state.lastCalcRange = { start: state.startDate, end: state.endDate };
   renderSummary(summary);
   renderTable(rows);
@@ -256,10 +257,11 @@ function renderTable(rows) {
         <th>Маржа</th>
         <th>Сумма Отмен</th>
         <th>Маржа без отмен</th>
+        <th>Прогноз маржи</th>
       </tr>
     `;
   }
-  const columnCount = 12 + otherGroups.length;
+  const columnCount = 13 + otherGroups.length;
   if (!rows || rows.length === 0) {
     elements.resultBody.innerHTML = `
       <tr>
@@ -270,6 +272,10 @@ function renderTable(rows) {
     `;
     return;
   }
+  const fd = state.forecastData || {};
+  const cancelRate = fd.cancelRate || 0;
+  const deliveringMap = fd.deliveringByArticle || {};
+
   elements.resultBody.innerHTML = rows
     .map((row) => {
       const byGroup = row.accrualByGroup || {};
@@ -277,6 +283,25 @@ function renderTable(rows) {
         .map((group) => `<td>${formatNumber(byGroup[group] || 0)}</td>`)
         .join("");
       const salesValue = getSalesValue(byGroup);
+
+      // Прогноз маржи с учётом заказов "Доставляется"
+      let forecastMarginStr = "—";
+      const deliveryQty = deliveringMap[row.article] || 0;
+      if (deliveryQty > 0 && row.qty > 0) {
+        const expectedQty = deliveryQty * (1 - cancelRate);
+        const avgAccrual = row.accrual / row.qty;
+        const avgAds = row.ads / row.qty;
+        const extraAccrual = avgAccrual * expectedQty;
+        const extraAds = avgAds * expectedQty;
+        const extraCostSum = row.cost * expectedQty;
+        const forecastRevenue = row.revenue + extraAccrual - extraAds;
+        const forecastCostSum = row.costSum + extraCostSum;
+        const forecastMargin = forecastRevenue > 0
+          ? (forecastRevenue - forecastCostSum) / forecastRevenue
+          : 0;
+        forecastMarginStr = formatPercent(forecastMargin);
+      }
+
       return `
         <tr>
           <td>${row.article}</td>
@@ -292,6 +317,7 @@ function renderTable(rows) {
           <td>${formatPercent(row.margin)}</td>
           <td>${formatNumber(row.cancelSum || 0)}</td>
           <td>${formatPercent(row.marginWithoutCancel || 0)}</td>
+          <td>${forecastMarginStr}</td>
         </tr>
       `;
     })
