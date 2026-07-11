@@ -158,8 +158,17 @@ function renderSummary(values) {
       <div>Маржа: ${formatPercent(values.marginBeforeTax)}</div>
       <div>Сумма Отмен: ${formatNumber(values.totalCancelSum)}</div>
       <div>Маржа без отмен: ${formatPercent(values.summaryMarginWithoutCancel)}</div>
+      <div id="forecast-margin-summary"></div>
     </div>
   `;
+}
+
+function updateForecastMarginSummary(forecastMargin) {
+  const el = document.getElementById("forecast-margin-summary");
+  if (!el) return;
+  el.textContent = forecastMargin !== null
+    ? `Прогноз маржи: ${formatPercent(forecastMargin)}`
+    : "";
 }
 
 function downloadReportExcel() {
@@ -278,6 +287,10 @@ function renderTable(rows) {
   const deliveringMap = fd.deliveringByArticle || {};
   const stencilAdsMap = state.lastStencilAdsByArticle || {};
 
+  let forecastTotalRevenue = 0;
+  let forecastTotalCost = 0;
+  let hasAnyForecast = false;
+
   elements.resultBody.innerHTML = rows
     .map((row) => {
       const byGroup = row.accrualByGroup || {};
@@ -307,6 +320,12 @@ function renderTable(rows) {
           ? (forecastRevenue - forecastCostSum) / forecastRevenue
           : 0;
         forecastMarginStr = formatPercent(forecastMargin);
+        forecastTotalRevenue += forecastRevenue;
+        forecastTotalCost += forecastCostSum;
+        hasAnyForecast = true;
+      } else {
+        forecastTotalRevenue += row.revenue;
+        forecastTotalCost += row.costSum;
       }
 
       return `
@@ -329,6 +348,11 @@ function renderTable(rows) {
       `;
     })
     .join("");
+
+  const summaryForecastMargin = hasAnyForecast && forecastTotalRevenue > 0
+    ? (forecastTotalRevenue - forecastTotalCost) / forecastTotalRevenue
+    : null;
+  updateForecastMarginSummary(summaryForecastMargin);
 }
 
 function onCalculateClick() {
