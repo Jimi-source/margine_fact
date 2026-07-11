@@ -40,6 +40,7 @@ async function calculateRemote() {
   state.lastSummary = summary;
   state.lastRows = rows;
   state.forecastData = data.forecastData || null;
+  state.lastStencilAdsByArticle = data.stencilData ? (data.stencilData.adsByArticle || {}) : {};
   state.lastCalcRange = { start: state.startDate, end: state.endDate };
   renderSummary(summary);
   renderTable(rows);
@@ -275,6 +276,7 @@ function renderTable(rows) {
   const fd = state.forecastData || {};
   const cancelRate = fd.cancelRate || 0;
   const deliveringMap = fd.deliveringByArticle || {};
+  const stencilAdsMap = state.lastStencilAdsByArticle || {};
 
   elements.resultBody.innerHTML = rows
     .map((row) => {
@@ -290,7 +292,12 @@ function renderTable(rows) {
       if (deliveryQty > 0 && row.qty > 0) {
         const expectedQty = deliveryQty * (1 - cancelRate);
         const avgAccrual = row.accrual / row.qty;
-        const avgAds = row.ads / row.qty;
+        // Используем скорректированную реестром рекламу вместо сырой row.ads
+        const stencilV = stencilAdsMap[row.article];
+        const correctedAds = stencilV && typeof stencilV === "object"
+          ? (stencilV.stencil || 0) + (stencilV.pvp || 0)
+          : row.ads;
+        const avgAds = correctedAds / row.qty;
         const extraAccrual = avgAccrual * expectedQty;
         const extraAds = avgAds * expectedQty;
         const extraCostSum = row.cost * expectedQty;
