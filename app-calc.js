@@ -63,9 +63,25 @@ async function calculateRemote() {
       stencilOnlyByArticle[a] = typeof v === "object" ? (v.stencil || 0) : (v || 0);
       pvpOnlyByArticle[a] = typeof v === "object" ? (v.pvp || 0) : 0;
     }
+    // Строим скорректированные строки по артикулам (реклама — из реестра трафаретов)
+    const correctedRows = rows.map((row) => {
+      const stencil = stencilOnlyByArticle[row.article] || 0;
+      const pvp = pvpOnlyByArticle[row.article] || 0;
+      const hasCorrection = row.article in stencilOnlyByArticle || row.article in pvpOnlyByArticle;
+      if (!hasCorrection) return row;
+      const correctedAds = stencil + pvp;
+      const correctedRevenue = row.accrual - correctedAds + row.otherPerArticle;
+      const correctedMargin = correctedRevenue > 0 ? (correctedRevenue - row.costSum) / correctedRevenue : 0;
+      const correctedRevenueWithoutCancel = correctedRevenue - (row.cancelSum || 0);
+      const correctedMarginWithoutCancel = correctedRevenueWithoutCancel > 0
+        ? (correctedRevenueWithoutCancel - row.costSum) / correctedRevenueWithoutCancel : 0;
+      return { ...row, ads: correctedAds, revenue: correctedRevenue, margin: correctedMargin, marginWithoutCancel: correctedMarginWithoutCancel };
+    });
     setCashflowEntry(matchedPeriod.key, {
       marginBeforeTax: summary.marginBeforeTax,
       summary,
+      rows: correctedRows,
+      accrualGroups: state.accrualGroups || [],
       stencilOrderCountsInPeriod: stencilData.orderCountsInPeriod || {},
       stencilAdsByArticle: stencilOnlyByArticle,
       pvpAdsByArticle: pvpOnlyByArticle

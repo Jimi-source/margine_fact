@@ -352,6 +352,14 @@ function openCashflowPeriod() {
     state.lastSummary = entry.summary;
     state.lastCalcRange = { start: period.start, end: period.end };
     renderSummary(entry.summary);
+    if (entry.rows && entry.rows.length > 0) {
+      state.lastRows = entry.rows;
+      state.accrualGroups = entry.accrualGroups || [];
+      state.forecastData = null;
+      state.lastStencilAdsByArticle = {};
+      renderTable(entry.rows);
+      updateDownloadAvailability();
+    }
     setCashflowStatus(`Открыт период: ${period.label}. Показан последний расчет.`);
   } else {
     setCashflowStatus(`Открыт период: ${period.label}.`);
