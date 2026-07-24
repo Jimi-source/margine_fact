@@ -1,5 +1,8 @@
 # marginefact-api
 
+## ВАЖНО: читать при каждой сессии
+Всегда читай `.claude/agents/project-context.md` в самом начале сессии — там полный контекст проекта: бизнес-логика, алгоритмы, схема БД, тонкости трафаретов.
+
 Web service for calculating profit margins. Accepts Excel (.xlsx/.xls) and CSV files,
 calculates margin/profitability and returns the result.
 
