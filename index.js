@@ -1095,10 +1095,28 @@ function recalcEntryStencil(entry, spendRegistry, orderRegistry) {
     ? (newRevenueWithoutCancel - (summary.totalCost || 0)) / newRevenueWithoutCancel
     : 0;
 
+  // Обновляем per-SKU строки — приводим ads/revenue/margin в соответствие с новым реестром
+  const updatedRows = (entry.rows || []).map((row) => {
+    const article = row.article;
+    const newStencil = newStencilByArticle[article] || 0;
+    const pvp = Number(pvpByArticle[article]) || 0;
+    const newAds = Object.keys(pvpByArticle).length > 0
+      ? newStencil + pvp
+      : (row.ads || 0) - (oldStencilByArticle[article] || 0) + newStencil;
+    if (Math.abs(newAds - (row.ads || 0)) < 0.01) return row;
+    const newRevenue = (row.accrual || 0) - newAds + (row.otherPerArticle || 0);
+    const newMargin = newRevenue > 0 ? (newRevenue - (row.costSum || 0)) / newRevenue : 0;
+    const newRevenueWithoutCancel = newRevenue - (row.cancelSum || 0);
+    const newMarginWithoutCancel = newRevenueWithoutCancel > 0
+      ? (newRevenueWithoutCancel - (row.costSum || 0)) / newRevenueWithoutCancel : 0;
+    return { ...row, ads: newAds, revenue: newRevenue, margin: newMargin, marginWithoutCancel: newMarginWithoutCancel };
+  });
+
   return {
     ...entry,
     marginBeforeTax: newMarginBeforeTax,
     stencilAdsByArticle: newStencilByArticle,
+    rows: updatedRows,
     summary: {
       ...summary,
       totalAds: newTotalAds,
