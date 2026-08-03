@@ -38,7 +38,7 @@ async function calculateRemote() {
   const missingCosts = data.missingCosts || [];
   state.accrualGroups = Array.isArray(data.accrualGroups) ? data.accrualGroups : [];
   state.lastSummary = summary;
-  state.lastRows = rows.slice().sort((a, b) => getSalesValue(b.accrualByGroup) - getSalesValue(a.accrualByGroup));
+  state.lastRows = rows.slice().sort((a, b) => (b.accrual || 0) - (a.accrual || 0));
   state.forecastData = data.forecastData || null;
   state.lastStencilAdsByArticle = data.stencilData ? (data.stencilData.adsByArticle || {}) : {};
   state.lastCalcRange = { start: state.startDate, end: state.endDate };
