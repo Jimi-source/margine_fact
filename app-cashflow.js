@@ -353,7 +353,7 @@ function openCashflowPeriod() {
     state.lastCalcRange = { start: period.start, end: period.end };
     renderSummary(entry.summary);
     if (entry.rows && entry.rows.length > 0) {
-      state.lastRows = entry.rows;
+      state.lastRows = entry.rows.slice().sort((a, b) => getSalesValue(b.accrualByGroup) - getSalesValue(a.accrualByGroup));
       state.accrualGroups = entry.accrualGroups || [];
       state.forecastData = null;
       state.lastStencilAdsByArticle = {};
