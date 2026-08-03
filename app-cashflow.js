@@ -357,7 +357,7 @@ function openCashflowPeriod() {
       state.accrualGroups = entry.accrualGroups || [];
       state.forecastData = null;
       state.lastStencilAdsByArticle = {};
-      renderTable(entry.rows);
+      renderTable(state.lastRows);
       updateDownloadAvailability();
     }
     setCashflowStatus(`Открыт период: ${period.label}. Показан последний расчет.`);
