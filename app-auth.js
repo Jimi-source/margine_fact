@@ -183,7 +183,7 @@ async function loadUserCredits(user) {
     state.userRole = result && result.role ? String(result.role) : null;
   } catch (error) {
     state.userCredits = 0;
-    state.userRole = null;
+    // не сбрасываем userRole при ошибке сети — вкладки остаются видимыми
     setAuthStatus(mapAuthError(error), true);
   }
   updateOwnerUI();
