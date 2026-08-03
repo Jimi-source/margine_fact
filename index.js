@@ -1096,13 +1096,17 @@ function recalcEntryStencil(entry, spendRegistry, orderRegistry) {
     : 0;
 
   // Обновляем per-SKU строки — приводим ads/revenue/margin в соответствие с новым реестром
+  const hasPvp = Object.keys(pvpByArticle).length > 0;
   const updatedRows = (entry.rows || []).map((row) => {
     const article = row.article;
     const newStencil = newStencilByArticle[article] || 0;
     const pvp = Number(pvpByArticle[article]) || 0;
-    const newAds = Object.keys(pvpByArticle).length > 0
+    const newAds = hasPvp
       ? newStencil + pvp
       : (row.ads || 0) - (oldStencilByArticle[article] || 0) + newStencil;
+    if (article === "Б-гранат") {
+      console.log(`[ROW_DEBUG] ${article}: row.ads=${row.ads} oldStencil=${oldStencilByArticle[article]} newStencil=${newStencil} pvp=${pvp} hasPvp=${hasPvp} newAds=${newAds} delta=${Math.abs(newAds-(row.ads||0)).toFixed(4)}`);
+    }
     if (Math.abs(newAds - (row.ads || 0)) < 0.01) return row;
     const newRevenue = (row.accrual || 0) - newAds + (row.otherPerArticle || 0);
     const newMargin = newRevenue > 0 ? (newRevenue - (row.costSum || 0)) / newRevenue : 0;
