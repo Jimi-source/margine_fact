@@ -1071,19 +1071,18 @@ function recalcEntryStencil(entry, spendRegistry, orderRegistry) {
     deltaStencil += (newStencilByArticle[article] || 0) - (oldStencilByArticle[article] || 0);
   }
 
-  if (Math.abs(deltaStencil) < 0.01) return null; // изменение незначительное
-
   const summary = entry.summary;
   if (!summary) return null;
 
   // Вычисляем pvp-составляющую из сохранённого pvpAdsByArticle, затем перестраиваем totalAds абсолютно
   const pvpByArticle = entry.pvpAdsByArticle || {};
+  const hasPvp = Object.keys(pvpByArticle).length > 0;
   const totalPvp = Object.values(pvpByArticle).reduce((s, v) => s + (Number(v) || 0), 0);
   const oldTotalStencil = Object.values(oldStencilByArticle).reduce((s, v) => s + v, 0);
   const newTotalStencil = Object.values(newStencilByArticle).reduce((s, v) => s + v, 0);
 
   // Если pvpAdsByArticle не сохранён — откатываемся к дельта-методу
-  const newTotalAds = Object.keys(pvpByArticle).length > 0
+  const newTotalAds = hasPvp
     ? totalPvp + newTotalStencil
     : (summary.totalAds || 0) - oldTotalStencil + newTotalStencil;
   const newRevenueBeforeTax = (summary.totalAccrual || 0) + (summary.otherServicesTotal || 0) - newTotalAds;
@@ -1096,7 +1095,9 @@ function recalcEntryStencil(entry, spendRegistry, orderRegistry) {
     : 0;
 
   // Обновляем per-SKU строки — приводим ads/revenue/margin в соответствие с новым реестром
-  const hasPvp = Object.keys(pvpByArticle).length > 0;
+  // Делаем это ДО проверки deltaStencil: если pvp есть, всегда можем вычислить верный ads=stencil+pvp
+  // и сравнить с тем что сохранено в row (могло остаться со старого расчёта без коррекции реестром)
+  let rowsChanged = false;
   const updatedRows = (entry.rows || []).map((row) => {
     const article = row.article;
     const newStencil = newStencilByArticle[article] || 0;
@@ -1104,17 +1105,18 @@ function recalcEntryStencil(entry, spendRegistry, orderRegistry) {
     const newAds = hasPvp
       ? newStencil + pvp
       : (row.ads || 0) - (oldStencilByArticle[article] || 0) + newStencil;
-    if (article === "Б-гранат") {
-      console.log(`[ROW_DEBUG] ${article}: row.ads=${row.ads} oldStencil=${oldStencilByArticle[article]} newStencil=${newStencil} pvp=${pvp} hasPvp=${hasPvp} newAds=${newAds} delta=${Math.abs(newAds-(row.ads||0)).toFixed(4)}`);
-    }
     if (Math.abs(newAds - (row.ads || 0)) < 0.01) return row;
+    rowsChanged = true;
     const newRevenue = (row.accrual || 0) - newAds + (row.otherPerArticle || 0);
     const newMargin = newRevenue > 0 ? (newRevenue - (row.costSum || 0)) / newRevenue : 0;
-    const newRevenueWithoutCancel = newRevenue - (row.cancelSum || 0);
-    const newMarginWithoutCancel = newRevenueWithoutCancel > 0
-      ? (newRevenueWithoutCancel - (row.costSum || 0)) / newRevenueWithoutCancel : 0;
+    const newRowRevenueWithoutCancel = newRevenue - (row.cancelSum || 0);
+    const newMarginWithoutCancel = newRowRevenueWithoutCancel > 0
+      ? (newRowRevenueWithoutCancel - (row.costSum || 0)) / newRowRevenueWithoutCancel : 0;
     return { ...row, ads: newAds, revenue: newRevenue, margin: newMargin, marginWithoutCancel: newMarginWithoutCancel };
   });
+
+  // Если ни summary ни rows не изменились — не обновляем запись
+  if (Math.abs(deltaStencil) < 0.01 && !rowsChanged) return null;
 
   return {
     ...entry,
