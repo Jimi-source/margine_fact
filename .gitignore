@@ -3,3 +3,4 @@ node_modules/
 ~$*.xlsx
 serviceAccount.json
 .env
+marginefact_export.json
