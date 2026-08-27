@@ -4,3 +4,4 @@ node_modules/
 serviceAccount.json
 .env
 marginefact_export.json
+vps_credentials.rtf
