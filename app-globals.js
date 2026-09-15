@@ -19,6 +19,7 @@ window.addEventListener("unhandledrejection", (event) => {
 const STORAGE_KEYS = {
   authToken: "mf_auth_token",
   authEmail: "mf_auth_email",
+  authRole: "mf_auth_role",
   sebes: "mf_sebes",
   cashflow: "mf_cashflow"
 };

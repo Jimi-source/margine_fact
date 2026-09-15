@@ -243,11 +243,22 @@ function storeAuthSession(email, token) {
   }
 }
 
+function storeUserRole(role) {
+  state.userRole = role || null;
+  if (role) {
+    localStorage.setItem(STORAGE_KEYS.authRole, role);
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.authRole);
+  }
+}
+
 function clearAuthSession() {
   state.user = null;
   state.authToken = "";
+  state.userRole = null;
   localStorage.removeItem(STORAGE_KEYS.authEmail);
   localStorage.removeItem(STORAGE_KEYS.authToken);
+  localStorage.removeItem(STORAGE_KEYS.authRole);
 }
 
 function restoreAuthSession() {
@@ -259,6 +270,9 @@ function restoreAuthSession() {
   }
   state.user = { email };
   state.authToken = token;
+  // Роль восстанавливаем из прошлой сессии — иначе до ответа /initUser (или если он
+  // не ответит) userRole=null и updateOwnerUI прячет вкладку cashflow
+  state.userRole = localStorage.getItem(STORAGE_KEYS.authRole) || null;
   return true;
 }
 

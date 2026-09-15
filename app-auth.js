@@ -170,7 +170,7 @@ async function handleAuthSuccess(email, token) {
 async function loadUserCredits(user) {
   if (!user) {
     state.userCredits = null;
-    state.userRole = null;
+    storeUserRole(null);
     state.lastRows = [];
     updateDownloadAvailability();
     updateAuthUI(null);
@@ -180,10 +180,12 @@ async function loadUserCredits(user) {
     const result = await initUserRemote();
     const credits = result ? Number(result.credits || 0) : 0;
     state.userCredits = Number.isFinite(credits) ? credits : 0;
-    state.userRole = result && result.role ? String(result.role) : null;
+    storeUserRole(result && result.role ? String(result.role) : null);
   } catch (error) {
     state.userCredits = 0;
-    // не сбрасываем userRole при ошибке сети — вкладки остаются видимыми
+    // роль не трогаем: она восстановлена из прошлой сессии в restoreAuthSession.
+    // Сбросить её здесь — значит спрятать вкладку cashflow из-за любого сбоя сети
+    // или перезапуска сервера, и вернуть её сможет только повторный вход
     setAuthStatus(mapAuthError(error), true);
   }
   updateOwnerUI();
