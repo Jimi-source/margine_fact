@@ -24,6 +24,8 @@ const MINQ = Number(arg("min-qty", 40));
 // Какую долю начислений считать достаточной, чтобы объявить неделю закрытой.
 // 99.5 — консервативно (обычно 4 недели хвоста), 98.5 — на неделю раньше.
 const COVERAGE = Number(arg("coverage", 99.5));
+// --by-week: строка на (неделя, SKU) вместо суммы за период — видно динамику
+const BY_WEEK = process.argv.includes("--by-week");
 
 const env = {};
 for (const l of fs.readFileSync("/var/www/marginefact-api/.env", "utf8").split("\n")) {
@@ -84,11 +86,37 @@ const DAY = 86400000;
   // 3. Агрегация по SKU
   const acc = new Map();
   const perWeek = [];
+  const byWeek = []; // те же поля, но без складывания: строка на (неделя, SKU)
   for (const [key, e] of used) {
     const st = e.stencilAdsByArticle || {}, pv = e.pvpAdsByArticle || {};
-    const w = { период: key.replace("week|", "").replace("|", ".."), шт: 0, продажи: 0, начисления: 0, реклама: 0, себес: 0, прочие: Number((e.summary || {}).otherServicesTotal || 0) };
+    const период = key.replace("week|", "").replace("|", "..");
+    const w = { период, шт: 0, продажи: 0, начисления: 0, реклама: 0, себес: 0, прочие: Number((e.summary || {}).otherServicesTotal || 0) };
     for (const r of e.rows || []) {
       if (!r.article) continue;
+      {
+        const ads = stencilOf(st[r.article]) + Number(pv[r.article] || 0);
+        const rev = Number(r.accrual || 0) - ads + Number(r.otherPerArticle || 0);
+        byWeek.push({
+          период,
+          артикул: r.article,
+          шт: Number(r.qty || 0),
+          продажи: g(r, "Продажи"),
+          возвраты: g(r, "Возвраты"),
+          вознаграждение_ozon: g(r, "Вознаграждение Ozon"),
+          услуги_доставки: g(r, "Услуги доставки"),
+          услуги_партнёров: g(r, "Услуги партнёров"),
+          реклама_из_начислений: g(r, "Продвижение и реклама"),
+          другие_услуги_и_штрафы: g(r, "Другие услуги и штрафы") + g(r, "Без группы"),
+          начисления_итого: Number(r.accrual || 0),
+          реклама_трафарет: stencilOf(st[r.article]),
+          реклама_пвп: Number(pv[r.article] || 0),
+          прочие_услуги_разнесённые: Number(r.otherPerArticle || 0),
+          себестоимость: Number(r.costSum || 0),
+          сумма_отмен: Number(r.cancelSum || 0),
+          выручка: rev,
+          маржа_доля: rev > 0 ? (rev - Number(r.costSum || 0)) / rev : null
+        });
+      }
       const a = acc.get(r.article) || { article: r.article, qty: 0, sales: 0, returns: 0, comm: 0, deliv: 0, partner: 0, adsAccr: 0, fines: 0, stencil: 0, pvp: 0, otherPer: 0, accrual: 0, cost: 0, cancel: 0 };
       a.qty += Number(r.qty || 0);
       a.sales += g(r, "Продажи");
@@ -190,9 +218,17 @@ const DAY = 86400000;
   };
 
   if (FORMAT === "json") {
-    console.log(JSON.stringify({ _поля: ПОЛЯ, meta, totals, perWeek, items }, null, 1));
+    const out = { _поля: ПОЛЯ, meta, totals, perWeek };
+    if (BY_WEEK) out.byWeek = byWeek; else out.items = items;
+    console.log(JSON.stringify(out, null, 1));
     return pool.end();
   }
+
+  const DATA_COLS = ["продажи", "возвраты", "вознаграждение_ozon", "услуги_доставки",
+    "услуги_партнёров", "реклама_из_начислений", "другие_услуги_и_штрафы", "начисления_итого",
+    "реклама_трафарет", "реклама_пвп", "прочие_услуги_разнесённые", "себестоимость",
+    "сумма_отмен", "выручка", "маржа_доля"];
+  const малые = new Set(items.filter((x) => x.выборка_мала).map((x) => x.артикул));
 
   const f = (v, d = 0) => (v === null || v === undefined ? "-" : Number(v).toFixed(d));
   if (FORMAT === "md") {
@@ -204,16 +240,17 @@ const DAY = 86400000;
     console.log(`## Что означает каждое поле\n`);
     for (const [k, v] of Object.entries(ПОЛЯ)) console.log(`- **${k}** — ${v}`);
     console.log(`\nВсе суммы в рублях, за весь период целиком (не на единицу). Расходные статьи отрицательные, как их отдаёт Ozon. Налог не применён.\n`);
-    console.log(`## Данные по SKU\n`);
-    const cols = ["артикул", "шт", "продажи", "возвраты", "вознаграждение_ozon", "услуги_доставки",
-      "услуги_партнёров", "реклама_из_начислений", "другие_услуги_и_штрафы", "начисления_итого",
-      "реклама_трафарет", "реклама_пвп", "прочие_услуги_разнесённые", "себестоимость",
-      "сумма_отмен", "выручка", "маржа_доля"];
+    const cols = (BY_WEEK ? ["период", "артикул", "шт"] : ["артикул", "шт"]).concat(DATA_COLS);
+    const src = BY_WEEK ? byWeek : items;
+    console.log(BY_WEEK
+      ? `## Данные по SKU в разрезе недель\n\nСтрока на каждую пару «неделя + SKU», суммы не складывались.\n`
+      : `## Данные по SKU\n`);
     console.log(`| ${cols.join(" | ")} |`);
     console.log(`|${cols.map(() => "---").join("|")}|`);
-    for (const i of items) {
+    for (const i of src) {
       const cells = cols.map((c) => {
-        if (c === "артикул") return i.артикул + (i.выборка_мала ? " ⚠" : "");
+        if (c === "период") return i.период;
+        if (c === "артикул") return i.артикул + (малые.has(i.артикул) ? " ⚠" : "");
         if (c === "шт") return i.шт;
         if (c === "маржа_доля") return i.маржа_доля === null ? "-" : i.маржа_доля.toFixed(4);
         return f(i[c]);
@@ -232,12 +269,14 @@ const DAY = 86400000;
   const pad = (s, n) => String(s).padEnd(n);
   const lpad = (s, n) => String(s).padStart(n);
   console.log("Суммы в рублях за весь период. Расходные статьи отрицательные. Расшифровка полей: --format md\n");
-  console.log(pad("SKU", 22) + lpad("шт", 5) + lpad("продажи", 9) + lpad("возвр", 8) + lpad("комис", 9) +
+  const head = BY_WEEK ? pad("период", 24) + pad("SKU", 22) : pad("SKU", 22);
+  console.log(head + lpad("шт", 5) + lpad("продажи", 9) + lpad("возвр", 8) + lpad("комис", 9) +
     lpad("логист", 8) + lpad("партнёр", 8) + lpad("рекл_нач", 9) + lpad("штрафы", 8) + lpad("начисл", 9) +
     lpad("трафарет", 9) + lpad("ПВП", 8) + lpad("прочие", 8) + lpad("себес", 8) + lpad("отмены", 8) +
     lpad("выручка", 9) + lpad("маржа", 8));
-  for (const i of items) {
-    console.log(pad(i.артикул + (i.выборка_мала ? " ⚠" : ""), 22) + lpad(i.шт, 5) + lpad(f(i.продажи), 9) +
+  for (const i of (BY_WEEK ? byWeek : items)) {
+    console.log((BY_WEEK ? pad(i.период, 24) : "") +
+      pad(i.артикул + (малые.has(i.артикул) ? " ⚠" : ""), 22) + lpad(i.шт, 5) + lpad(f(i.продажи), 9) +
       lpad(f(i.возвраты), 8) + lpad(f(i.вознаграждение_ozon), 9) + lpad(f(i.услуги_доставки), 8) +
       lpad(f(i.услуги_партнёров), 8) + lpad(f(i.реклама_из_начислений), 9) + lpad(f(i.другие_услуги_и_штрафы), 8) +
       lpad(f(i.начисления_итого), 9) + lpad(f(i.реклама_трафарет), 9) + lpad(f(i.реклама_пвп), 8) +
