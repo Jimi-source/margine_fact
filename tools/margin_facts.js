@@ -26,6 +26,10 @@ const MINQ = Number(arg("min-qty", 40));
 const COVERAGE = Number(arg("coverage", 99.5));
 // --by-week: строка на (неделя, SKU) вместо суммы за период — видно динамику
 const BY_WEEK = process.argv.includes("--by-week");
+// --include-open: включить и незакрытые недели. Каждая неделя помечена тем,
+// сколько недель хвоста по ней наблюдалось и какая доля начислений обычно
+// успевает прийти за этот срок — решение, что считать закрытым, за аналитиком.
+const INCLUDE_OPEN = process.argv.includes("--include-open");
 
 const env = {};
 for (const l of fs.readFileSync("/var/www/marginefact-api/.env", "utf8").split("\n")) {
@@ -80,8 +84,17 @@ const DAY = 86400000;
     const end = new Date(k.split("|")[2]);
     return lastCalcEnd && (lastCalcEnd - end) / DAY / 7 >= closedLagWeeks;
   });
-  const used = closed.slice(-WEEKS);
-  if (!used.length) throw new Error("нет закрытых недель с разбивкой по SKU");
+  // Сколько недель хвоста наблюдалось по неделе и какая доля начислений обычно
+  // успевает прийти за этот срок. Факт, а не вердикт: порог выбирает аналитик.
+  const хвостПо = (key) => {
+    const end = new Date(key.split("|")[2]);
+    const t = lastCalcEnd ? Math.floor((lastCalcEnd - end) / DAY / 7) : 0;
+    const row = lagTable.filter((x) => x.недель <= t).pop();
+    return { хвост_недель: t, "доля_доехавших_%": row ? row.накоплено : 0, закрыта: t >= closedLagWeeks };
+  };
+
+  const used = (INCLUDE_OPEN ? all : closed).slice(-WEEKS);
+  if (!used.length) throw new Error("нет недель с разбивкой по SKU");
 
   // 3. Агрегация по SKU
   const acc = new Map();
@@ -90,7 +103,8 @@ const DAY = 86400000;
   for (const [key, e] of used) {
     const st = e.stencilAdsByArticle || {}, pv = e.pvpAdsByArticle || {};
     const период = key.replace("week|", "").replace("|", "..");
-    const w = { период, шт: 0, продажи: 0, начисления: 0, реклама: 0, себес: 0, прочие: Number((e.summary || {}).otherServicesTotal || 0) };
+    const хв = хвостПо(key);
+    const w = { период, ...хв, шт: 0, продажи: 0, начисления: 0, реклама: 0, себес: 0, прочие: Number((e.summary || {}).otherServicesTotal || 0) };
     for (const r of e.rows || []) {
       if (!r.article) continue;
       {
@@ -98,6 +112,7 @@ const DAY = 86400000;
         const rev = Number(r.accrual || 0) - ads + Number(r.otherPerArticle || 0);
         byWeek.push({
           период,
+          ...хв,
           артикул: r.article,
           шт: Number(r.qty || 0),
           продажи: g(r, "Продажи"),
