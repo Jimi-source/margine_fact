@@ -232,6 +232,7 @@ function getStoredAuthToken() {
 }
 
 function storeAuthSession(email, token) {
+  sessionExpiredHandled = false; // новая сессия — снова готовы ловить протухание
   const normalizedEmail = normalizeEmail(email);
   state.user = normalizedEmail ? { email: normalizedEmail } : null;
   state.authToken = token || "";
@@ -240,6 +241,33 @@ function storeAuthSession(email, token) {
   }
   if (token) {
     localStorage.setItem(STORAGE_KEYS.authToken, token);
+  }
+}
+
+// Сервер отвечает на протухший токен по-разному: /initUser даёт 401,
+// остальные эндпоинты — 400 с текстом ошибки от jwt.verify. Ловим оба случая.
+const AUTH_ERROR_RE = /jwt expired|invalid token|invalid signature|jwt malformed|missing token|нужно войти/i;
+
+function isAuthFailure(status, message) {
+  return status === 401 || AUTH_ERROR_RE.test(String(message || ""));
+}
+
+let sessionExpiredHandled = false;
+
+// Протухшая сессия: чистим её и честно говорим об этом, вместо нулевого баланса
+// и красной ошибки про кэшфлоу, по которым кажется, что данные пропали.
+function handleSessionExpired() {
+  if (sessionExpiredHandled) return;
+  sessionExpiredHandled = true;
+  clearAuthSession();
+  state.userCredits = null;
+  state.lastRows = [];
+  state.cashflow.entries = {};
+  if (typeof updateAuthUI === "function") updateAuthUI(null);
+  if (typeof renderCashflowTable === "function") renderCashflowTable();
+  if (typeof setCashflowStatus === "function") setCashflowStatus("");
+  if (typeof setAuthStatus === "function") {
+    setAuthStatus("Срок сессии истёк — войдите снова. Данные и токены на месте.", true);
   }
 }
 
@@ -320,7 +348,12 @@ async function apiRequest(path, { method = "GET", body } = {}) {
   const data = await response.json();
   if (!response.ok || !data || !data.ok) {
     const errorMessage = data && data.error ? data.error : "Ошибка сервера.";
-    throw new Error(errorMessage);
+    const error = new Error(errorMessage);
+    if (isAuthFailure(response.status, errorMessage)) {
+      error.sessionExpired = true;
+      handleSessionExpired();
+    }
+    throw error;
   }
   return data;
 }

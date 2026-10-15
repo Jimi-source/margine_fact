@@ -182,6 +182,10 @@ async function loadUserCredits(user) {
     state.userCredits = Number.isFinite(credits) ? credits : 0;
     storeUserRole(result && result.role ? String(result.role) : null);
   } catch (error) {
+    // Истёкшая сессия уже обработана в handleSessionExpired: там и очистка,
+    // и понятное сообщение. Показывать 0 токенов поверх него нельзя — выглядит
+    // так, будто баланс обнулился, хотя его просто не удалось запросить
+    if (error && error.sessionExpired) return;
     state.userCredits = 0;
     // роль не трогаем: она восстановлена из прошлой сессии в restoreAuthSession.
     // Сбросить её здесь — значит спрятать вкладку cashflow из-за любого сбоя сети

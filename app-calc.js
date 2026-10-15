@@ -126,7 +126,12 @@ async function initUserRemote() {
   const data = await response.json();
   if (!response.ok || !data || !data.ok) {
     const errorMessage = data && data.error ? data.error : "Ошибка сервера.";
-    throw new Error(errorMessage);
+    const error = new Error(errorMessage);
+    if (isAuthFailure(response.status, errorMessage)) {
+      error.sessionExpired = true;
+      handleSessionExpired();
+    }
+    throw error;
   }
   return { credits: data.credits, role: data.role };
 }

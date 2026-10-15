@@ -383,6 +383,9 @@ async function loadCashflow(year) {
     updateCashflowActions();
     if (typeof renderMarginChart === "function") renderMarginChart();
   } catch (error) {
+    // При истёкшей сессии сообщение уже показано в блоке авторизации —
+    // не перекрываем его ошибкой, по которой кажется, что данные пропали
+    if (error && error.sessionExpired) return;
     setCashflowStatus("Не удалось загрузить кэшфлоу.", true);
   }
 }
