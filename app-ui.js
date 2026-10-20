@@ -187,13 +187,22 @@ function getUploadUI(input) {
   };
 }
 
+// Принимает File, массив File или null. Массив — для полей с multiple
+// (трафареты: по одному файлу на рекламную кампанию).
 function setUploadUI(input, file) {
   const ui = getUploadUI(input);
   if (!ui) return;
-  if (file) {
+  const files = Array.isArray(file) ? file.filter(Boolean) : file ? [file] : [];
+  if (files.length > 0) {
+    const label = files.length === 1
+      ? files[0].name
+      : `${files.length} ${pluralFiles(files.length)}: ${files.map((f) => f.name).join(", ")}`;
     ui.wrapper.classList.add("has-file");
     if (ui.info) ui.info.classList.remove("hidden");
-    if (ui.name) ui.name.textContent = file.name;
+    if (ui.name) {
+      ui.name.textContent = label;
+      ui.name.title = files.map((f) => f.name).join("\n");
+    }
     if (ui.hint) ui.hint.classList.add("hidden");
     if (ui.remove) ui.remove.classList.remove("hidden");
   } else {
@@ -204,8 +213,18 @@ function setUploadUI(input, file) {
       ui.hint.textContent = "Загрузите или перетяните отчет в это поле";
       ui.hint.classList.remove("hidden");
     }
+    if (ui.name) ui.name.title = "";
     if (ui.remove) ui.remove.classList.add("hidden");
   }
+}
+
+function pluralFiles(n) {
+  const tens = n % 100;
+  const ones = n % 10;
+  if (tens >= 11 && tens <= 14) return "файлов";
+  if (ones === 1) return "файл";
+  if (ones >= 2 && ones <= 4) return "файла";
+  return "файлов";
 }
 
 function clearFileState(type) {
@@ -233,33 +252,49 @@ function onDateChange() {
   updateStatus();
 }
 
+// Разбирает один файл в массив строк по схеме. Вынесено из onFileChange,
+// чтобы несколько файлов читались обычным циклом.
+async function readRowsFromFile(file, type, normalizedSchema, fallback) {
+  const workbook = await readWorkbook(file, { bookFiles: type === "accruals" });
+  let data = null;
+  if (type === "accruals") {
+    const rowsFromXml = buildRowsFromWorkbookFiles(workbook);
+    if (rowsFromXml && rowsFromXml.length > 0) {
+      const firstCell = String(rowsFromXml[0]?.[0] || "").toLowerCase();
+      const skipFirstRow = firstCell.includes("период");
+      data = extractRowsBySchemaOrPositionsFromRows(
+        rowsFromXml,
+        normalizedSchema,
+        fallback,
+        { skipFirstRow }
+      );
+    }
+  }
+  if (!data) {
+    const options = {
+      skipFirstRow: type === "accruals",
+      normalizeCell: type === "accruals" ? fixCyrillicMojibake : null
+    };
+    data = extractRowsBySchemaOrPositions(workbook, normalizedSchema, fallback, options);
+  }
+  return data;
+}
+
 function onFileChange(type, schema, fallback) {
   return async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+    // Поле трафаретов помечено multiple: по одному файлу на рекламную кампанию.
+    // У остальных полей multiple нет, поэтому список всегда из одного файла.
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
     try {
-      const workbook = await readWorkbook(file, { bookFiles: type === "accruals" });
       const normalizedSchema = normalizeSchema(schema);
-      let data = null;
-      if (type === "accruals") {
-        const rowsFromXml = buildRowsFromWorkbookFiles(workbook);
-        if (rowsFromXml && rowsFromXml.length > 0) {
-          const firstCell = String(rowsFromXml[0]?.[0] || "").toLowerCase();
-          const skipFirstRow = firstCell.includes("период");
-          data = extractRowsBySchemaOrPositionsFromRows(
-            rowsFromXml,
-            normalizedSchema,
-            fallback,
-            { skipFirstRow }
-          );
+      const data = [];
+      for (const file of files) {
+        const rows = await readRowsFromFile(file, type, normalizedSchema, fallback);
+        if (!rows || rows.length === 0) {
+          throw new Error(`в файле «${file.name}» не нашлись нужные колонки`);
         }
-      }
-      if (!data) {
-        const options = {
-          skipFirstRow: type === "accruals",
-          normalizeCell: type === "accruals" ? fixCyrillicMojibake : null
-        };
-        data = extractRowsBySchemaOrPositions(workbook, normalizedSchema, fallback, options);
+        data.push(...rows);
       }
       state[type] = data;
       if (type === "accruals") {
@@ -279,7 +314,7 @@ function onFileChange(type, schema, fallback) {
         state.showOtherServices = false;
         renderOtherServicesFilter();
       }
-      setUploadUI(event.target, file);
+      setUploadUI(event.target, files);
       updateStatus();
     } catch (error) {
       setStatus(`Ошибка: ${error.message}`, true);
